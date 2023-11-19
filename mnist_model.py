@@ -53,7 +53,9 @@ def load_mnist_data(features_path, labels_path):
         # if i > 1000:
         #     break
 
-    return result
+    random.shuffle(result)
+
+    return result[:1000]
 
 
 def argmax(vector):
@@ -80,8 +82,8 @@ def test_mnist(train_examples, test_examples):
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=3,
-        learning_rate=1.0)
+        epochs=30,
+        learning_rate=0.1)
 
     train(network, config, train_examples)
 
