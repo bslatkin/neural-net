@@ -95,6 +95,12 @@ class FullyConnected(Layer):
 
         return input_error
 
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'biases={self.biases}, '
+            f'weights={self.weights})')
+
 
 def relu(x):
     if x >= 0:
@@ -139,6 +145,9 @@ class Activation(Layer):
 
         return input_error
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}()'
+
 
 def mean_squared_error(desired, found):
     total = 0
@@ -156,6 +165,10 @@ def mean_squared_error_derivative(desired, found):
         scaled = 2 / len(desired) * delta
         result.append(scaled)
     return result
+
+
+
+# add an l2
 
 
 class Network:
@@ -198,6 +211,7 @@ def train_one(network, config, input_vector, expected_output):
     # across all of the samples in the batch.
     mse = config.loss(expected_output, output)
     output_error = config.loss_derivative(expected_output, output)
+    print(f'LossDerivative={output_error}')
 
     for layer, last_input in zip(reversed(network.layers), reversed(history)):
         output_error = layer.backward(
@@ -220,6 +234,9 @@ def train(network, config, examples):
                 f'Epoch={epoch_index+1}, '
                 f'Example={error_count}, '
                 f'AvgError={error_sum/error_count:.10f}')
+
+            for i, layer in enumerate(network.layers, 1):
+                print(f'Layer {i}: {layer}')
 
 
 def predict(network, input_vector):
