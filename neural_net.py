@@ -237,10 +237,11 @@ def train(network, config, examples):
             error_sum += mse
             error_count += 1
 
-            print(
-                f'Epoch={epoch_index+1}, '
-                f'Example={error_count}, '
-                f'AvgError={error_sum/error_count:.10f}')
+            if error_count % 100 == 0:
+                print(
+                    f'Epoch={epoch_index+1}, '
+                    f'Example={error_count}, '
+                    f'AvgError={error_sum/error_count:.10f}')
 
             # for i, layer in enumerate(network.layers, 1):
             #     print(f'Layer {i}: {layer}')

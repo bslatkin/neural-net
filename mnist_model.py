@@ -80,7 +80,7 @@ def test_mnist(train_examples, test_examples):
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=1,
+        epochs=3,
         learning_rate=1.0)
 
     train(network, config, train_examples)
