@@ -4,9 +4,6 @@ import random
 
 
 class Layer:
-    def __init__(self):
-        self.last_input = None
-
     def forward(self, input_vector):
         pass
 
@@ -16,7 +13,6 @@ class Layer:
 
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
-        super().__init__()
         self.input_count = input_count
         self.output_count = output_count
 
@@ -40,8 +36,6 @@ class FullyConnected(Layer):
             self.weights.append(weights_i)
 
     def forward(self, input_vector):
-        self.last_input = input_vector
-
         output = []
 
         for j in range(self.output_count):
@@ -57,7 +51,7 @@ class FullyConnected(Layer):
 
         return output
 
-    def backward(self, output_error, learning_rate):
+    def backward(self, last_input, output_error, learning_rate):
         # Output error is ∂E/∂Y
         bias_error = output_error
 
@@ -66,7 +60,7 @@ class FullyConnected(Layer):
         # Columns are number of outputs
         weights_error = []
         for i in range(self.input_count):
-            input_i = self.last_input[i]
+            input_i = last_input[i]
             weights_error_i = []
 
             for j in range(self.output_count):
@@ -134,13 +128,141 @@ class Activation(Layer):
 
         return output
 
-    def backward(self, output_error, learning_rate):
+    def backward(self, last_input, output_error, learning_rate):
         input_error = []
         for i in range(self.count):
-            input_i = self.last_input[i]
+            input_i = last_input[i]
             output_error_i = output_error[i]
             output_i_derivative = self.function_derivative(input_i)
             input_error_i = output_i_derivative * output_error_i
             input_error.append(input_error_i)
 
         return input_error
+
+
+def mean_squared_error(desired, found):
+    total = 0
+    for desired_i, found_i in zip(desired, found):
+        delta = desired_i - found_i
+        total += delta ** 2
+    mean = total / len(desired)
+    return mean
+
+
+def mean_squared_error_derivative(desired, found):
+    result = []
+    for desired_i, found_i in zip(desired, found):
+        delta = found_i - desired_i
+        scaled = 2 / len(desired) * delta
+        result.append(scaled)
+    return result
+
+
+class Network:
+    def __init__(self):
+        self.layers = []
+
+    def add(self, layer):
+        self.layers.append(layer)
+
+
+class TrainingConfig:
+    def __init__(self,
+                 *,
+                 loss,
+                 loss_derivative,
+                 epochs,
+                 learning_rate):
+        self.loss = loss
+        self.loss_derivative = loss_derivative
+        self.epochs = epochs
+        self.learning_rate = learning_rate
+
+
+def feed_forward(network, input_vector):
+    next_input = input_vector
+    history = []
+
+    for layer in network.layers:
+        history.append(next_input)
+        output = layer.forward(next_input)
+        next_input = output
+
+    return history, output
+
+
+def train_one(network, config, input_vector, expected_output):
+    history, output = feed_forward(network, input_vector)
+
+    # TODO: For batching, the output error gradient would be averaged
+    # across all of the samples in the batch.
+    mse = config.loss(expected_output, output)
+    output_error = config.loss_derivative(expected_output, output)
+
+    for layer, last_input in zip(reversed(network.layers), reversed(history)):
+        output_error = layer.backward(
+            last_input, output_error, config.learning_rate)
+
+    return mse
+
+
+def train(network, config, examples):
+    for epoch_index in range(config.epochs):
+        error_sum = 0
+        error_count = 0
+
+        for input_vector, expected_output in examples:
+            mse = train_one(network, config, input_vector, expected_output)
+            error_sum += mse
+            error_count += 1
+
+            print(
+                f'Epoch={epoch_index+1}, '
+                f'Example={error_count}, '
+                f'AvgError={error_sum/error_count:.10f}')
+
+
+def predict(network, input_vector):
+    _, output = feed_forward(network, input_vector)
+    return output
+
+
+def test_xor():
+    network = Network()
+    network.add(FullyConnected(2, 3))
+    network.add(Activation(3, relu, relu_derivative))
+    network.add(FullyConnected(3, 1))
+    network.add(Activation(1, relu, relu_derivative))
+
+    config = TrainingConfig(
+        loss=mean_squared_error,
+        loss_derivative=mean_squared_error_derivative,
+        epochs=1000,
+        learning_rate=0.1)
+
+    labeled_examples = [
+        ((0, 0), (0,)),
+        ((0, 1), (1,)),
+        ((1, 0), (1,)),
+        ((1, 1), (0,)),
+    ]
+
+    train(network, config, labeled_examples)
+
+    test_examples = labeled_examples
+
+    error_sum = 0
+    error_count = 0
+
+    for input_vector, expected_output in test_examples:
+        output = predict(network, input_vector)
+        print(f'Input={input_vector}, Output={output}')
+
+        mse = config.loss(expected_output, output)
+        error_sum += mse
+        error_count += 1
+
+    print(f'AvgError={error_sum/error_count:.10f}')
+
+
+test_xor()
