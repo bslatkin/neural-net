@@ -52,6 +52,8 @@ class FullyConnected(Layer):
         return output
 
     def backward(self, last_input, output_error, learning_rate):
+        print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
+
         # Output error is ∂E/∂Y
         bias_error = output_error
 
@@ -70,6 +72,8 @@ class FullyConnected(Layer):
 
             weights_error.append(weights_error_i)
 
+        print(f'{self.__class__.__name__}{id(self)}: WeightsError={weights_error}')
+
         # Same size as the input
         input_error = []
         for i in range(self.input_count):
@@ -81,6 +85,8 @@ class FullyConnected(Layer):
                 input_error_i += output_error_j * weight_ij
 
             input_error.append(input_error_i)
+
+        print(f'{self.__class__.__name__}{id(self)}: InputError={input_error}')
 
         # Update the biases
         for j in range(self.output_count):
@@ -113,7 +119,8 @@ def relu_derivative(x):
     if x >= 0:
         return 1
     else:
-        return 0
+        # Leaky relu so negative gradients will cause weight updates
+        return 0.01
 
 
 class Activation(Layer):
@@ -135,6 +142,8 @@ class Activation(Layer):
         return output
 
     def backward(self, last_input, output_error, learning_rate):
+        print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
+
         input_error = []
         for i in range(self.count):
             input_i = last_input[i]
@@ -165,10 +174,6 @@ def mean_squared_error_derivative(desired, found):
         scaled = 2 / len(desired) * delta
         result.append(scaled)
     return result
-
-
-
-# add an l2
 
 
 class Network:
@@ -221,6 +226,10 @@ def train_one(network, config, input_vector, expected_output):
 
 
 def train(network, config, examples):
+    print('Start training')
+    for i, layer in enumerate(network.layers, 1):
+        print(f'Layer {i}: {layer}')
+
     for epoch_index in range(config.epochs):
         error_sum = 0
         error_count = 0
@@ -254,7 +263,7 @@ def test_xor():
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=1000,
+        epochs=1_000,
         learning_rate=0.1)
 
     labeled_examples = [
