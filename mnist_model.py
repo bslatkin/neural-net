@@ -116,5 +116,5 @@ def test_mnist(train_examples, test_examples):
 
 
 test_mnist(
-    load_mnist_data(sys.argv[1], sys.argv[2]),
-    load_mnist_data(sys.argv[3], sys.argv[4]))
+    load_mnist_data(sys.argv[1], sys.argv[2]),  # Train files
+    load_mnist_data(sys.argv[3], sys.argv[4]))  # Test files
