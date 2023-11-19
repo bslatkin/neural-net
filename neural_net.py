@@ -1,5 +1,6 @@
 # Attempting to implement https://towardsdatascience.com/math-neural-network-from-scratch-in-python-d6da9f29ce65
 
+import math
 import random
 
 
@@ -51,7 +52,7 @@ class FullyConnected(Layer):
 
         return output
 
-    def backward(self, last_input, output_error, learning_rate):
+    def backward(self, last_input, output_error, config):
         print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
         # Output error is ∂E/∂Y
@@ -91,13 +92,14 @@ class FullyConnected(Layer):
         # Update the biases
         for j in range(self.output_count):
             bias_error_j = bias_error[j]
-            self.biases[j] -= learning_rate * bias_error_j
+            self.biases[j] -= config.learning_rate * bias_error_j
 
         # Update weights
         for i in range(self.input_count):
             for j in range(self.output_count):
                 weights_error_ij = weights_error[i][j]
-                self.weights[i][j] -= learning_rate * weights_error_ij
+                delta = config.learning_rate * weights_error_ij
+                self.weights[i][j] -= delta
 
         return input_error
 
@@ -108,19 +110,13 @@ class FullyConnected(Layer):
             f'weights={self.weights})')
 
 
-def relu(x):
-    if x >= 0:
-        return x
-    else:
-        return 0
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
 
 
-def relu_derivative(x):
-    if x >= 0:
-        return 1
-    else:
-        # Leaky relu so negative gradients will cause weight updates
-        return 0.01
+def sigmoid_derivative(x):
+    f_x = sigmoid(x)
+    return f_x * (1 - f_x)
 
 
 class Activation(Layer):
@@ -219,8 +215,7 @@ def train_one(network, config, input_vector, expected_output):
     print(f'LossDerivative={output_error}')
 
     for layer, last_input in zip(reversed(network.layers), reversed(history)):
-        output_error = layer.backward(
-            last_input, output_error, config.learning_rate)
+        output_error = layer.backward(last_input, output_error, config)
 
     return mse
 
@@ -256,15 +251,15 @@ def predict(network, input_vector):
 def test_xor():
     network = Network()
     network.add(FullyConnected(2, 3))
-    network.add(Activation(3, relu, relu_derivative))
+    network.add(Activation(3, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(3, 1))
-    network.add(Activation(1, relu, relu_derivative))
+    network.add(Activation(1, sigmoid, sigmoid_derivative))
 
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=1_000,
-        learning_rate=0.1)
+        learning_rate=0.5)
 
     labeled_examples = [
         ((0, 0), (0,)),
