@@ -45,13 +45,27 @@ def load_mnist_data(features_path, labels_path):
     pixel_it = struct.iter_unpack(f'{28*28}B', features_data[16:])
 
     result = []
-    for label, pixels in zip(label_it, pixel_it):
+    for i, (label, pixels) in enumerate(zip(label_it, pixel_it)):
         label_index = label[0]
         label_bits = INDEX_TO_BITS[label_index]
         normalized_pixels = [p / 255.0 for p in pixels]
         result.append((normalized_pixels, label_bits))
+        # if i > 1000:
+        #     break
 
     return result
+
+
+def argmax(vector):
+    it = iter(vector)
+    max_index = 0
+    max_value = next(it)
+
+    for i, value in enumerate(it, 1):
+        if value > max_value:
+            max_index = i
+
+    return max_index
 
 
 def test_mnist(train_examples, test_examples):
@@ -67,22 +81,38 @@ def test_mnist(train_examples, test_examples):
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=1,
-        learning_rate=0.5)
+        learning_rate=1.0)
 
     train(network, config, train_examples)
 
     error_sum = 0
     error_count = 0
+    correct_count = 0
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
-        print(f'Input={input_vector}, Output={output}')
-
         mse = config.loss(expected_output, output)
+
+        expected_argmax = argmax(expected_output)
+        found_argmax = argmax(output)
+        correct = found_argmax == expected_argmax
+
+        print(
+            f'Example={error_count}, '
+            f'Found={found_argmax}, '
+            f'Expected={expected_argmax}, '
+            f'Correct={correct}, '
+            f'Error={mse}')
+
         error_sum += mse
         error_count += 1
+        if correct:
+            correct_count += 1
 
-    print(f'AvgError={error_sum/error_count:.10f}')
+    print(
+        f'AvgError={error_sum/error_count:.10f}, '
+        f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
+
 
 
 test_mnist(
