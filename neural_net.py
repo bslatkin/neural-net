@@ -101,3 +101,46 @@ class FullyConnected(Layer):
 
         return input_error
 
+
+def relu(x):
+    if x >= 0:
+        return x
+    else:
+        return 0
+
+
+def relu_derivative(x):
+    if x >= 0:
+        return 1
+    else:
+        return 0
+
+
+class Activation(Layer):
+    def __init__(self, count, function, function_derivative):
+        super().__init__()
+        self.count = count
+        self.function = function
+        self.function_derivative = function_derivative
+
+    def forward(self, input_vector):
+        self.last_input = input_vector
+
+        output = []
+        for i in range(self.count):
+            input_i = input_vector[i]
+            output_i = self.function(input_i)
+            output.append(output_i)
+
+        return output
+
+    def backward(self, output_error, learning_rate):
+        input_error = []
+        for i in range(self.count):
+            input_i = self.last_input[i]
+            output_error_i = output_error[i]
+            output_i_derivative = self.function_derivative(input_i)
+            input_error_i = output_i_derivative * output_error_i
+            input_error.append(input_error_i)
+
+        return input_error
