@@ -5,17 +5,10 @@ import random
 
 
 class Layer:
-    def forward(self, input_vector):
+    def forward(self, input_matrix):
         raise NotImplementedError
 
-    def backward(self, output_error, learning_rate):
-        raise NotImplementedError
-
-    def serialize(self):
-        raise NotImplementedError
-
-    @classmethod
-    def from_data(self, datat):
+    def backward(self, output_error_matrix, learning_rate):
         raise NotImplementedError
 
 
@@ -32,6 +25,7 @@ class FullyConnected(Layer):
 
         # Rows are number of inputs
         # Columns are number of outputs
+        # Column vectors are the weights for one output
         self.weights = []
 
         for i in range(self.input_count):
@@ -43,59 +37,101 @@ class FullyConnected(Layer):
 
             self.weights.append(weights_i)
 
-    def forward(self, input_vector):
-        assert len(input_vector) == self.input_count, \
-            f'{len(input_vector)=} == {self.input_count=}'
+    def forward(self, input_matrix):
+        # Row vectors are the inputs for one batch
+        # Each column is an input value for that specific example
+        batch_size = len(input_matrix)
+        input_count = len(input_matrix[0])
 
-        output = []
+        assert input_count == self.input_count, \
+            f'{input_count=} == {self.input_count=}'
 
-        for j in range(self.output_count):
-            bias_j = self.biases[j]
-            output_j = bias_j
+        result = []
 
-            for i in range(self.input_count):
-                weight_ij = self.weights[i][j]
-                x_i = input_vector[i]
-                output_j += weight_ij * x_i
+        # Output has batch size rows, output size columns
+        for b in range(batch_size):
+            input_b = input_matrix[b]
+            output_b = []
 
-            output.append(output_j)
+            for j in range(self.output_count):
+                bias_j = self.biases[j]
+                output_j = bias_j
 
-        return output
+                for i in range(self.input_count):
+                    x_i = input_b[i]
+                    weight_ij = self.weights[i][j]
+                    output_j += x_i * weight_ij
 
-    def backward(self, last_input, output_error, config):
+                output_b.append(output_j)
+
+            result.append(output_b)
+
+        return result
+
+    def backward(self, last_input_matrix, output_error_matrix, config):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
-        # Output error is ∂E/∂Y
-        bias_error = output_error
+        batch_size = len(output_error_matrix)
+
+        # Output error is ∂E/∂Y, each row is a batch, and each column in each
+        # row is the error gradient for that output position. But the biases
+        # in this FullyConnected layer are merely a vector. So this sums all
+        # of the gradients for each output positions across all batches
+        # in order to calculate the error gradient for the bias update.
+        # This took me a long time to figure out! This post helped:
+        # https://stats.stackexchange.com/questions/373163/how-are-biases-updated-when-batch-size-1
+        bias_error = []
+        for j in range(self.output_count):
+            bias_error_j = 0
+            for i in range(batch_size):
+                output_error_ij = output_error_matrix[i][j]
+                bias_error_j += output_error_ij
+            bias_error.append(bias_error_j)
 
         # Same size as the weights matrix
         # Rows are number of inputs
         # Columns are number of outputs
+        # X^T * ∂E/∂Y
         weights_error = []
         for i in range(self.input_count):
-            input_i = last_input[i]
-            weights_error_i = []
-
+            weights_i = []
             for j in range(self.output_count):
-                output_error_j = output_error[j]
-                weight_error_ij = output_error_j * input_i
-                weights_error_i.append(weight_error_ij)
+                weights_i.append(0)
+            weights_error.append(weights_i)
 
-            weights_error.append(weights_error_i)
+        # x has one row per batch with columns being input values
+        # x^t has each batch as a column, so each row is the i-th input across all batches
+
+        # ∂E/∂Y has one row per batch, each column is the j-th output
+        # the weight error at each point ij is the dot product
+        # of the i-th input across all batches with the j-th output
+        # across all batches.
+        for i in range(self.input_count):
+            for j in range(self.output_count):
+                for batch_index in range(batch_size):
+                    input_bi = last_input_matrix[batch_index][i]
+                    output_error_bj = output_error_matrix[batch_index][j]
+                    weights_error[i][j] += input_bi * output_error_bj
 
         # print(f'{self.__class__.__name__}{id(self)}: WeightsError={weights_error}')
 
         # Same size as the input
+        # Rows are batches
+        # Columns are inputs
+        # ∂E/∂Y * W^T
         input_error = []
+        for batch_index in range(batch_size):
+            input_error_b = []
+            for i in range(self.input_count):
+                input_error_b.append(0)
+            input_error.append(input_error_b)
+
         for i in range(self.input_count):
-            input_error_i = 0
-
             for j in range(self.output_count):
-                output_error_j = output_error[j]
-                weight_ij = self.weights[i][j]
-                input_error_i += output_error_j * weight_ij
-
-            input_error.append(input_error_i)
+                for batch_index in range(batch_size):
+                    output_error_bj = output_error_matrix[batch_index][j]
+                    weight_ij = self.weights[i][j]
+                    input_error[batch_index][i] += output_error_bj * weight_ij
 
         # print(f'{self.__class__.__name__}{id(self)}: InputError={input_error}')
 
@@ -120,13 +156,20 @@ class FullyConnected(Layer):
             f'weights={self.weights})')
 
 
-def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
+def sigmoid(input_vector):
+    result = []
+    for item in input_vector:
+        value = 1 / (1 + math.exp(-item))
+        result.append(value)
+    return result
 
 
-def sigmoid_derivative(x):
-    f_x = sigmoid(x)
-    return f_x * (1 - f_x)
+def sigmoid_derivative(input_vector):
+    result = []
+    for f_x in sigmoid(input_vector):
+        value = f_x * (1 - f_x)
+        result.append(value)
+    return result
 
 
 class Activation(Layer):
@@ -136,49 +179,87 @@ class Activation(Layer):
         self.function = function
         self.function_derivative = function_derivative
 
-    def forward(self, input_vector):
-        self.last_input = input_vector
+    def forward(self, input_matrix):
+        batch_size = len(input_matrix)
 
-        output = []
-        for i in range(self.count):
-            input_i = input_vector[i]
-            output_i = self.function(input_i)
-            output.append(output_i)
+        result = []
 
-        return output
+        for batch_index in range(batch_size):
+            if batch_index >= len(input_matrix):
+                breakpoint()
+            input_b = input_matrix[batch_index]
+            output_b = self.function(input_b)
+            result.append(output_b)
 
-    def backward(self, last_input, output_error, learning_rate):
+        return result
+
+    def backward(self, last_input_matrix, output_error_matrix, learning_rate):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
-        input_error = []
-        for i in range(self.count):
-            input_i = last_input[i]
-            output_error_i = output_error[i]
-            output_i_derivative = self.function_derivative(input_i)
-            input_error_i = output_i_derivative * output_error_i
-            input_error.append(input_error_i)
+        batch_size = len(last_input_matrix)
 
-        return input_error
+        result = []
+
+        for batch_index in range(batch_size):
+            last_input_b = last_input_matrix[batch_index]
+            output_error = output_error_matrix[batch_index]
+            output_derivative = self.function_derivative(last_input_b)
+
+            input_error_b = []
+
+            for error_i, derivative_i in zip(output_error, output_derivative):
+                input_error_i = error_i * derivative_i
+                input_error_b.append(input_error_i)
+
+            result.append(input_error_b)
+
+        return result
 
     def __repr__(self):
         return f'{self.__class__.__name__}()'
 
 
-def mean_squared_error(desired, found):
-    total = 0
-    for desired_i, found_i in zip(desired, found):
-        delta = desired_i - found_i
-        total += delta ** 2
-    mean = total / len(desired)
-    return mean
+def mean_squared_error(desired_matrix, found_matrix):
+    batch_size = len(desired_matrix)
 
-
-def mean_squared_error_derivative(desired, found):
     result = []
-    for desired_i, found_i in zip(desired, found):
-        delta = found_i - desired_i
-        scaled = 2 / len(desired) * delta
-        result.append(scaled)
+
+    for batch_index in range(batch_size):
+        desired = desired_matrix[batch_index]
+        found = found_matrix[batch_index]
+
+        total = 0
+        for desired_i, found_i in zip(desired, found):
+            delta = desired_i - found_i
+            total += delta ** 2
+        mean = total / len(desired)
+
+        result.append(mean)
+
+    return result
+
+
+def mean_squared_error_derivative(desired_matrix, found_matrix):
+    # Row vectors are batches
+    # Columns are outputs for a specific batch
+    batch_size = len(desired_matrix)
+
+    result = []
+
+    for batch_index in range(batch_size):
+        desired = desired_matrix[batch_index]
+        found = found_matrix[batch_index]
+
+        # Each result row contains gradients for each column of a batch
+        batch_result = []
+
+        for desired_i, found_i in zip(desired, found):
+            delta = found_i - desired_i
+            scaled = 2 / len(desired) * delta
+            batch_result.append(scaled)
+
+        result.append(batch_result)
+
     return result
 
 
@@ -196,15 +277,17 @@ class TrainingConfig:
                  loss,
                  loss_derivative,
                  epochs,
+                 batch_size,
                  learning_rate):
         self.loss = loss
         self.loss_derivative = loss_derivative
         self.epochs = epochs
+        self.batch_size = batch_size
         self.learning_rate = learning_rate
 
 
-def feed_forward(network, input_vector):
-    next_input = input_vector
+def feed_forward(network, input_matrix):
+    next_input = input_matrix
     history = []
 
     for layer in network.layers:
@@ -215,8 +298,10 @@ def feed_forward(network, input_vector):
     return history, output
 
 
-def train_one(network, config, input_vector, expected_output):
-    history, output = feed_forward(network, input_vector)
+def train_batch(network, config, batch):
+    input_matrix, expected_output = zip(*batch)
+
+    history, output = feed_forward(network, input_matrix)
 
     # TODO: For batching, the output error gradient would be averaged
     # across all of the samples in the batch.
@@ -230,6 +315,12 @@ def train_one(network, config, input_vector, expected_output):
     return mse
 
 
+def iter_batch(examples, batch_size):
+    for i in range(0, len(examples), batch_size):
+        next_slice = examples[i:i+batch_size]
+        yield next_slice
+
+
 def train(network, config, examples):
     print('Start training')
     # for i, layer in enumerate(network.layers, 1):
@@ -239,25 +330,22 @@ def train(network, config, examples):
         error_sum = 0
         error_count = 0
 
-        for input_vector, expected_output in examples:
-            mse = train_one(network, config, input_vector, expected_output)
-            error_sum += mse
-            error_count += 1
+        # random.shuffle(examples)
 
-            if error_count % 100 == 0:
-                print(
-                    f'Epoch={epoch_index+1}, '
-                    f'Example={error_count}, '
-                    f'AvgError={error_sum/error_count:.10f}')
+        for batch in iter_batch(examples, config.batch_size):
+            mse = train_batch(network, config, batch)
+            error_sum += sum(mse)
+            error_count += len(batch)
+
+        print(
+            f'Epoch={epoch_index+1}, '
+            f'AvgError={error_sum/error_count:.10f}')
 
             # for i, layer in enumerate(network.layers, 1):
             #     print(f'Layer {i}: {layer}')
 
 
 def predict(network, input_vector):
-    _, output = feed_forward(network, input_vector)
+    input_matrix = [input_vector]
+    _, output = feed_forward(network, input_matrix)
     return output
-
-
-def serialize(network):
-    pass

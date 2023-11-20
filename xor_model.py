@@ -11,8 +11,9 @@ def test_xor():
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=1_000,
-        learning_rate=0.5)
+        epochs=10_000,
+        batch_size=1,
+        learning_rate=0.1)
 
     labeled_examples = [
         ((0, 0), (0,)),
@@ -32,9 +33,9 @@ def test_xor():
         output = predict(network, input_vector)
         print(f'Input={input_vector}, Output={output}')
 
-        mse = config.loss(expected_output, output)
-        error_sum += mse
-        error_count += 1
+        mse = config.loss([expected_output], output)
+        error_sum += sum(mse)
+        error_count += len(mse)
 
     print(f'AvgError={error_sum/error_count:.10f}')
 
