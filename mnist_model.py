@@ -1,3 +1,4 @@
+import pickle
 import struct
 import sys
 
@@ -70,7 +71,14 @@ def argmax(vector):
     return max_index
 
 
-def test_mnist(train_examples, test_examples):
+config = TrainingConfig(
+    loss=mean_squared_error,
+    loss_derivative=mean_squared_error_derivative,
+    epochs=1,
+    learning_rate=0.1)
+
+
+def train_mnist(train_examples, model_path):
     network = Network()
     network.add(FullyConnected(28*28, 100))
     network.add(Activation(100, sigmoid, sigmoid_derivative))
@@ -79,13 +87,15 @@ def test_mnist(train_examples, test_examples):
     network.add(FullyConnected(50, 10))
     network.add(Activation(10, sigmoid, sigmoid_derivative))
 
-    config = TrainingConfig(
-        loss=mean_squared_error,
-        loss_derivative=mean_squared_error_derivative,
-        epochs=30,
-        learning_rate=0.1)
-
     train(network, config, train_examples)
+
+    with open(model_path, 'wb') as f:
+        pickle.dump(network, f)
+
+
+def eval_mnist(test_examples, model_path):
+    with open(model_path, 'rb') as f:
+        network = pickle.load(f)
 
     error_sum = 0
     error_count = 0
@@ -116,7 +126,11 @@ def test_mnist(train_examples, test_examples):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
+# train_mnist(
+#     load_mnist_data(sys.argv[1], sys.argv[2]),
+#     'mnist.pickle')
 
-test_mnist(
-    load_mnist_data(sys.argv[1], sys.argv[2]),  # Train files
-    load_mnist_data(sys.argv[3], sys.argv[4]))  # Test files
+
+eval_mnist(
+    load_mnist_data(sys.argv[3], sys.argv[4]),
+    'mnist.pickle')

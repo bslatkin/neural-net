@@ -6,10 +6,17 @@ import random
 
 class Layer:
     def forward(self, input_vector):
-        pass
+        raise NotImplementedError
 
     def backward(self, output_error, learning_rate):
-        pass
+        raise NotImplementedError
+
+    def serialize(self):
+        raise NotImplementedError
+
+    @classmethod
+    def from_data(self, datat):
+        raise NotImplementedError
 
 
 class FullyConnected(Layer):
@@ -250,3 +257,7 @@ def train(network, config, examples):
 def predict(network, input_vector):
     _, output = feed_forward(network, input_vector)
     return output
+
+
+def serialize(network):
+    pass
