@@ -12,7 +12,7 @@ def test_xor():
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=10_000,
-        batch_size=1,
+        batch_size=2,
         learning_rate=0.1)
 
     labeled_examples = [

@@ -332,14 +332,15 @@ def train(network, config, examples):
 
         # random.shuffle(examples)
 
-        for batch in iter_batch(examples, config.batch_size):
+        for i, batch in enumerate(iter_batch(examples, config.batch_size)):
             mse = train_batch(network, config, batch)
             error_sum += sum(mse)
             error_count += len(batch)
 
-        print(
-            f'Epoch={epoch_index+1}, '
-            f'AvgError={error_sum/error_count:.10f}')
+            print(
+                f'Epoch={epoch_index+1}, '
+                f'Examples={error_count}, '
+                f'AvgError={error_sum/error_count:.10f}')
 
             # for i, layer in enumerate(network.layers, 1):
             #     print(f'Layer {i}: {layer}')

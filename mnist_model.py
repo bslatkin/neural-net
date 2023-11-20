@@ -51,12 +51,10 @@ def load_mnist_data(features_path, labels_path):
         label_bits = INDEX_TO_BITS[label_index]
         normalized_pixels = [p / 255.0 for p in pixels]
         result.append((normalized_pixels, label_bits))
-        # if i > 1000:
-        #     break
 
     random.shuffle(result)
 
-    return result[:1000]
+    return result
 
 
 def argmax(vector):
@@ -75,6 +73,7 @@ config = TrainingConfig(
     loss=mean_squared_error,
     loss_derivative=mean_squared_error_derivative,
     epochs=1,
+    batch_size=128,
     learning_rate=0.1)
 
 
@@ -116,8 +115,8 @@ def eval_mnist(test_examples, model_path):
             f'Correct={correct}, '
             f'Error={mse}')
 
-        error_sum += mse
-        error_count += 1
+        error_sum += sum(mse)
+        error_count += len(mse)
         if correct:
             correct_count += 1
 
@@ -126,11 +125,11 @@ def eval_mnist(test_examples, model_path):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-# train_mnist(
-#     load_mnist_data(sys.argv[1], sys.argv[2]),
-#     'mnist.pickle')
-
-
-eval_mnist(
-    load_mnist_data(sys.argv[3], sys.argv[4]),
+train_mnist(
+    load_mnist_data(sys.argv[1], sys.argv[2]),
     'mnist.pickle')
+
+
+# eval_mnist(
+#     load_mnist_data(sys.argv[3], sys.argv[4]),
+#     'mnist.pickle')
