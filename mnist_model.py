@@ -54,7 +54,7 @@ def load_mnist_data(features_path, labels_path):
 
     random.shuffle(result)
 
-    return result
+    return result[:2000]  # XXX remove this
 
 
 def argmax(vector):
@@ -72,7 +72,7 @@ def argmax(vector):
 config = TrainingConfig(
     loss=mean_squared_error,
     loss_derivative=mean_squared_error_derivative,
-    epochs=1,
+    epochs=10,
     batch_size=128,
     learning_rate=0.1)
 
@@ -102,11 +102,15 @@ def eval_mnist(test_examples, model_path):
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
-        mse = config.loss(expected_output, output)
+        mse = config.loss([expected_output], output)
+        error_sum += sum(mse)
+        error_count += len(mse)
 
         expected_argmax = argmax(expected_output)
         found_argmax = argmax(output)
         correct = found_argmax == expected_argmax
+        if correct:
+            correct_count += 1
 
         print(
             f'Example={error_count}, '
@@ -115,21 +119,16 @@ def eval_mnist(test_examples, model_path):
             f'Correct={correct}, '
             f'Error={mse}')
 
-        error_sum += sum(mse)
-        error_count += len(mse)
-        if correct:
-            correct_count += 1
-
     print(
         f'AvgError={error_sum/error_count:.10f}, '
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-train_mnist(
-    load_mnist_data(sys.argv[1], sys.argv[2]),
-    'mnist.pickle')
-
-
-# eval_mnist(
-#     load_mnist_data(sys.argv[3], sys.argv[4]),
+# train_mnist(
+#     load_mnist_data(sys.argv[1], sys.argv[2]),
 #     'mnist.pickle')
+
+
+eval_mnist(
+    load_mnist_data(sys.argv[3], sys.argv[4]),
+    'mnist.pickle')
