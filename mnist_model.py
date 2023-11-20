@@ -61,10 +61,10 @@ def argmax(vector):
     it = iter(vector)
     max_index = 0
     max_value = next(it)
-
     for i, value in enumerate(it, 1):
         if value > max_value:
             max_index = i
+            max_value = value
 
     return max_index
 
@@ -101,16 +101,13 @@ def eval_mnist(test_examples, model_path):
     correct_count = 0
 
     for input_vector, expected_output in test_examples[:100]:
-        print(f'{expected_output=}')
-        print(f'{output=}')
-        print()
         output = predict(network, input_vector)
         mse = config.loss([expected_output], output)
         error_sum += sum(mse)
         error_count += len(mse)
 
         expected_argmax = argmax(expected_output)
-        found_argmax = argmax(output)
+        found_argmax = argmax(output[0])
         correct = found_argmax == expected_argmax
         if correct:
             correct_count += 1
@@ -121,6 +118,11 @@ def eval_mnist(test_examples, model_path):
             f'Expected={expected_argmax}, '
             f'Correct={correct}, '
             f'Error={mse}')
+
+        print('Label:  ', ', '.join('%.1f' % o for o in expected_output))
+        print('Output: ', ', '.join('%.1f' % o for o in output[0]))
+        print()
+
 
     print(
         f'AvgError={error_sum/error_count:.10f}, '
