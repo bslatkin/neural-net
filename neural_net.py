@@ -38,6 +38,7 @@ class FullyConnected(Layer):
 
             self.weights.append(weights_i)
 
+    # @profile
     def forward(self, input_matrix):
         # Row vectors are the inputs for one batch
         # Each column is an input value for that specific example
@@ -69,6 +70,7 @@ class FullyConnected(Layer):
 
         return result
 
+    # @profile
     def backward(self, last_input_matrix, output_error_matrix, config):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
@@ -109,10 +111,14 @@ class FullyConnected(Layer):
         # across all batches.
         for i in range(self.input_count):
             for j in range(self.output_count):
+                delta = 0
+
                 for batch_index in range(batch_size):
                     input_bi = last_input_matrix[batch_index][i]
                     output_error_bj = output_error_matrix[batch_index][j]
-                    weights_error[i][j] += input_bi * output_error_bj
+                    delta += input_bi * output_error_bj
+
+                weights_error[i][j] = delta
 
         # print(f'{self.__class__.__name__}{id(self)}: WeightsError={weights_error}')
 
@@ -129,9 +135,10 @@ class FullyConnected(Layer):
 
         for i in range(self.input_count):
             for j in range(self.output_count):
+                weight_ij = self.weights[i][j]
+
                 for batch_index in range(batch_size):
                     output_error_bj = output_error_matrix[batch_index][j]
-                    weight_ij = self.weights[i][j]
                     input_error[batch_index][i] += output_error_bj * weight_ij
 
         # print(f'{self.__class__.__name__}{id(self)}: InputError={input_error}')
@@ -180,6 +187,7 @@ class Activation(Layer):
         self.function = function
         self.function_derivative = function_derivative
 
+    # @profile
     def forward(self, input_matrix):
         batch_size = len(input_matrix)
 
@@ -194,6 +202,7 @@ class Activation(Layer):
 
         return result
 
+    # @profile
     def backward(self, last_input_matrix, output_error_matrix, learning_rate):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
