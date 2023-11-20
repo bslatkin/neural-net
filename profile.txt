@@ -1,0 +1,94 @@
+Start training
+Epoch=1, Examples=128, AvgError=0.2806249744
+Epoch=1, Examples=200, AvgError=0.2141386292
+         843425 function calls in 5.938 seconds
+
+   Ordered by: cumulative time, internal time, function name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    5.938    5.938 mnist_model.py:80(train_mnist)
+        1    0.002    0.002    5.902    5.902 neural_net.py:325(train)
+        2    0.001    0.001    5.900    2.950 neural_net.py:302(train_batch)
+        6    4.320    0.720    4.330    0.722 neural_net.py:72(backward)
+        2    0.000    0.000    1.551    0.775 neural_net.py:290(feed_forward)
+        6    1.541    0.257    1.542    0.257 neural_net.py:41(forward)
+        3    0.016    0.005    0.035    0.012 neural_net.py:17(__init__)
+   606600    0.018    0.000    0.018    0.000 {method 'append' of 'list' objects}
+        6    0.004    0.001    0.018    0.003 neural_net.py:197(backward)
+     1200    0.012    0.000    0.017    0.000 neural_net.py:160(sigmoid)
+    84060    0.012    0.000    0.015    0.000 random.py:520(uniform)
+      600    0.004    0.000    0.013    0.000 neural_net.py:168(sigmoid_derivative)
+        6    0.000    0.000    0.009    0.001 neural_net.py:183(forward)
+    84060    0.003    0.000    0.003    0.000 {method 'random' of '_random.Random' objects}
+    64000    0.003    0.000    0.003    0.000 {built-in method math.exp}
+        1    0.001    0.001    0.001    0.001 {built-in method _pickle.dump}
+        2    0.000    0.000    0.001    0.000 neural_net.py:243(mean_squared_error_derivative)
+        2    0.000    0.000    0.000    0.000 neural_net.py:223(mean_squared_error)
+        1    0.000    0.000    0.000    0.000 {built-in method io.open}
+     2837    0.000    0.000    0.000    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {method '__exit__' of '_io._IOBase' objects}
+        3    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        3    0.000    0.000    0.000    0.000 copyreg.py:113(_slotnames)
+        3    0.000    0.000    0.000    0.000 neural_net.py:319(iter_batch)
+        2    0.000    0.000    0.000    0.000 {built-in method builtins.sum}
+        3    0.000    0.000    0.000    0.000 neural_net.py:177(__init__)
+        6    0.000    0.000    0.000    0.000 neural_net.py:271(add)
+        3    0.000    0.000    0.000    0.000 {built-in method builtins.hasattr}
+        3    0.000    0.000    0.000    0.000 {method 'get' of 'mappingproxy' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        1    0.000    0.000    0.000    0.000 neural_net.py:268(__init__)
+
+
+   Ordered by: cumulative time, internal time, function name
+
+Function                                          was called by...
+                                                      ncalls  tottime  cumtime
+mnist_model.py:80(train_mnist)                    <-
+neural_net.py:325(train)                          <-       1    0.002    5.902  mnist_model.py:80(train_mnist)
+neural_net.py:302(train_batch)                    <-       2    0.001    5.900  neural_net.py:325(train)
+neural_net.py:72(backward)                        <-       6    4.320    4.330  neural_net.py:302(train_batch)
+neural_net.py:290(feed_forward)                   <-       2    0.000    1.551  neural_net.py:302(train_batch)
+neural_net.py:41(forward)                         <-       6    1.541    1.542  neural_net.py:290(feed_forward)
+neural_net.py:17(__init__)                        <-       3    0.016    0.035  mnist_model.py:80(train_mnist)
+{method 'append' of 'list' objects}               <-   84994    0.003    0.003  neural_net.py:17(__init__)
+                                                       32600    0.001    0.001  neural_net.py:41(forward)
+                                                      357388    0.010    0.010  neural_net.py:72(backward)
+                                                       64000    0.002    0.002  neural_net.py:160(sigmoid)
+                                                       32000    0.001    0.001  neural_net.py:168(sigmoid_derivative)
+                                                         600    0.000    0.000  neural_net.py:183(forward)
+                                                       32600    0.001    0.001  neural_net.py:197(backward)
+                                                         200    0.000    0.000  neural_net.py:223(mean_squared_error)
+                                                        2200    0.000    0.000  neural_net.py:243(mean_squared_error_derivative)
+                                                           6    0.000    0.000  neural_net.py:271(add)
+                                                          12    0.000    0.000  neural_net.py:290(feed_forward)
+neural_net.py:197(backward)                       <-       6    0.004    0.018  neural_net.py:302(train_batch)
+neural_net.py:160(sigmoid)                        <-     600    0.006    0.009  neural_net.py:168(sigmoid_derivative)
+                                                         600    0.006    0.008  neural_net.py:183(forward)
+random.py:520(uniform)                            <-   84060    0.012    0.015  neural_net.py:17(__init__)
+neural_net.py:168(sigmoid_derivative)             <-     600    0.004    0.013  neural_net.py:197(backward)
+neural_net.py:183(forward)                        <-       6    0.000    0.009  neural_net.py:290(feed_forward)
+{method 'random' of '_random.Random' objects}     <-   84060    0.003    0.003  random.py:520(uniform)
+{built-in method math.exp}                        <-   64000    0.003    0.003  neural_net.py:160(sigmoid)
+{built-in method _pickle.dump}                    <-       1    0.001    0.001  mnist_model.py:80(train_mnist)
+neural_net.py:243(mean_squared_error_derivative)  <-       2    0.000    0.001  neural_net.py:302(train_batch)
+neural_net.py:223(mean_squared_error)             <-       2    0.000    0.000  neural_net.py:302(train_batch)
+{built-in method io.open}                         <-       1    0.000    0.000  mnist_model.py:80(train_mnist)
+{built-in method builtins.len}                    <-      12    0.000    0.000  neural_net.py:41(forward)
+                                                           6    0.000    0.000  neural_net.py:72(backward)
+                                                         606    0.000    0.000  neural_net.py:183(forward)
+                                                           6    0.000    0.000  neural_net.py:197(backward)
+                                                         202    0.000    0.000  neural_net.py:223(mean_squared_error)
+                                                        2002    0.000    0.000  neural_net.py:243(mean_squared_error_derivative)
+                                                           1    0.000    0.000  neural_net.py:319(iter_batch)
+                                                           2    0.000    0.000  neural_net.py:325(train)
+{method '__exit__' of '_io._IOBase' objects}      <-       1    0.000    0.000  mnist_model.py:80(train_mnist)
+{built-in method builtins.print}                  <-       3    0.000    0.000  neural_net.py:325(train)
+copyreg.py:113(_slotnames)                        <-       3    0.000    0.000  {built-in method _pickle.dump}
+neural_net.py:319(iter_batch)                     <-       3    0.000    0.000  neural_net.py:325(train)
+{built-in method builtins.sum}                    <-       2    0.000    0.000  neural_net.py:325(train)
+neural_net.py:177(__init__)                       <-       3    0.000    0.000  mnist_model.py:80(train_mnist)
+neural_net.py:271(add)                            <-       6    0.000    0.000  mnist_model.py:80(train_mnist)
+{built-in method builtins.hasattr}                <-       3    0.000    0.000  copyreg.py:113(_slotnames)
+{method 'get' of 'mappingproxy' objects}          <-       3    0.000    0.000  copyreg.py:113(_slotnames)
+{method 'disable' of '_lsprof.Profiler' objects}  <-
+neural_net.py:268(__init__)                       <-       1    0.000    0.000  mnist_model.py:80(train_mnist)

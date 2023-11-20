@@ -2,6 +2,7 @@
 
 import math
 import random
+import sys
 
 
 class Layer:
@@ -350,3 +351,23 @@ def predict(network, input_vector):
     input_matrix = [input_vector]
     _, output = feed_forward(network, input_matrix)
     return output
+
+
+def profile_func(func, *args, **kwargs):
+    import cProfile
+    import pstats
+    from pstats import SortKey
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        return func(*args, **kwargs)
+    finally:
+        profiler.disable()
+
+        stats = pstats.Stats(profiler, stream=sys.stderr)
+        stats = stats.strip_dirs()
+        stats = stats.sort_stats(SortKey.CUMULATIVE, SortKey.TIME, SortKey.NAME)
+
+        stats.print_stats()
+        stats.print_callers()

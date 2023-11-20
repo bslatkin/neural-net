@@ -54,7 +54,7 @@ def load_mnist_data(features_path, labels_path):
 
     random.shuffle(result)
 
-    return result[:2000]  # XXX remove this
+    return result[:200]  # XXX remove this
 
 
 def argmax(vector):
@@ -72,7 +72,7 @@ def argmax(vector):
 config = TrainingConfig(
     loss=mean_squared_error,
     loss_derivative=mean_squared_error_derivative,
-    epochs=10,
+    epochs=1,
     batch_size=128,
     learning_rate=0.1)
 
@@ -129,11 +129,12 @@ def eval_mnist(test_examples, model_path):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-# train_mnist(
-#     load_mnist_data(sys.argv[1], sys.argv[2]),
+profile_func(
+    train_mnist,
+    load_mnist_data(sys.argv[1], sys.argv[2]),
+    'mnist.pickle2')
+
+
+# eval_mnist(
+#     load_mnist_data(sys.argv[3], sys.argv[4]),
 #     'mnist.pickle')
-
-
-eval_mnist(
-    load_mnist_data(sys.argv[3], sys.argv[4]),
-    'mnist.pickle')
