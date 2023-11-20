@@ -100,7 +100,10 @@ def eval_mnist(test_examples, model_path):
     error_count = 0
     correct_count = 0
 
-    for input_vector, expected_output in test_examples:
+    for input_vector, expected_output in test_examples[:100]:
+        print(f'{expected_output=}')
+        print(f'{output=}')
+        print()
         output = predict(network, input_vector)
         mse = config.loss([expected_output], output)
         error_sum += sum(mse)
