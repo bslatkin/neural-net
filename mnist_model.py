@@ -54,7 +54,7 @@ def load_mnist_data(features_path, labels_path):
 
     random.shuffle(result)
 
-    return result[:100]  # XXX remove this
+    return result[:2000]  # XXX remove this
 
 
 def argmax(vector):
@@ -72,9 +72,9 @@ def argmax(vector):
 config = TrainingConfig(
     loss=mean_squared_error,
     loss_derivative=mean_squared_error_derivative,
-    epochs=1,
+    epochs=10,
     batch_size=128,
-    learning_rate=0.1)
+    learning_rate=0.05)
 
 
 def train_mnist(train_examples, model_path):
