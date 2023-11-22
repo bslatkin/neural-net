@@ -13,6 +13,13 @@ class Layer:
         raise NotImplementedError
 
 
+def dot_product(a, b):
+    result = 0
+    for a_i, b_i in zip(a, b):
+        result += a_i * b_i
+    return result
+
+
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
         self.input_count = input_count
