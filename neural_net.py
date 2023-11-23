@@ -20,6 +20,18 @@ def dot_product(a, b):
     return result
 
 
+# def matrix_multiply(a, b):
+#     # rows are first dimension, columns second dimension
+#     result = []
+#     for row in a:
+
+#         for column in b:
+
+
+
+
+
+
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
         self.input_count = input_count
@@ -343,6 +355,8 @@ def train(network, config, examples):
     # for i, layer in enumerate(network.layers, 1):
         # print(f'Layer {i}: {layer}')
 
+    random.shuffle(examples)
+
     for epoch_index in range(config.epochs):
         error_sum = 0
         error_count = 0
@@ -387,3 +401,17 @@ def profile_func(func, *args, **kwargs):
 
         stats.print_stats()
         stats.print_callers()
+
+
+"""
+TODO
+- Allow for resuming training from a previous network
+- Allow control-C to interrupt the training and save a clean snapshot; need
+  to run the training on another thread to make this work right.
+- Compare performance:
+    - Use batch-size-efficient generated matmul functions for inner loops
+    - Use C-extension matmul functions for inner loops
+    - Use numpy matmul functions for inner loops
+- Parallelize feed forward for each item in a batch across multiple processes
+  using multiprocessing, then apply backpropagation in a single process
+"""

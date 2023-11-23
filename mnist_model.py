@@ -52,9 +52,7 @@ def load_mnist_data(features_path, labels_path):
         normalized_pixels = [p / 255.0 for p in pixels]
         result.append((normalized_pixels, label_bits))
 
-    random.shuffle(result)
-
-    return result[:2000]  # XXX remove this
+    return result
 
 
 def argmax(vector):
@@ -74,17 +72,21 @@ config = TrainingConfig(
     loss_derivative=mean_squared_error_derivative,
     epochs=10,
     batch_size=128,
-    learning_rate=0.05)
+    learning_rate=0.01)
 
 
-def train_mnist(train_examples, model_path):
-    network = Network()
-    network.add(FullyConnected(28*28, 100))
-    network.add(Activation(100, sigmoid, sigmoid_derivative))
-    network.add(FullyConnected(100, 50))
-    network.add(Activation(50, sigmoid, sigmoid_derivative))
-    network.add(FullyConnected(50, 10))
-    network.add(Activation(10, sigmoid, sigmoid_derivative))
+def train_mnist(train_examples, model_path, *, resume_path=None):
+    if resume_path:
+        with open(resume_path, 'rb') as f:
+            network = pickle.load(f)
+    else:
+        network = Network()
+        network.add(FullyConnected(28*28, 100))
+        network.add(Activation(100, sigmoid, sigmoid_derivative))
+        network.add(FullyConnected(100, 50))
+        network.add(Activation(50, sigmoid, sigmoid_derivative))
+        network.add(FullyConnected(50, 10))
+        network.add(Activation(10, sigmoid, sigmoid_derivative))
 
     train(network, config, train_examples)
 
@@ -100,7 +102,7 @@ def eval_mnist(test_examples, model_path):
     error_count = 0
     correct_count = 0
 
-    for input_vector, expected_output in test_examples[:100]:
+    for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
         mse = config.loss([expected_output], output)
         error_sum += sum(mse)
@@ -129,12 +131,11 @@ def eval_mnist(test_examples, model_path):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-# profile_func(
 train_mnist(
     load_mnist_data(sys.argv[1], sys.argv[2]),
-    'mnist.pickle2')
+    'mnist.pickle3')
 
 
-# eval_mnist(
-#     load_mnist_data(sys.argv[3], sys.argv[4]),
-#     'mnist.pickle')
+eval_mnist(
+    load_mnist_data(sys.argv[3], sys.argv[4]),
+    'mnist.pickle3')
