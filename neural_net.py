@@ -57,7 +57,6 @@ class FullyConnected(Layer):
 
             self.weights.append(weights_i)
 
-    # @profile
     def forward(self, input_matrix):
         # Row vectors are the inputs for one batch
         # Each column is an input value for that specific example
@@ -89,7 +88,6 @@ class FullyConnected(Layer):
 
         return result
 
-    # @profile
     def backward(self, last_input_matrix, output_error_matrix, config):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
@@ -206,7 +204,6 @@ class Activation(Layer):
         self.function = function
         self.function_derivative = function_derivative
 
-    # @profile
     def forward(self, input_matrix):
         batch_size = len(input_matrix)
 
@@ -221,7 +218,6 @@ class Activation(Layer):
 
         return result
 
-    # @profile
     def backward(self, last_input_matrix, output_error_matrix, learning_rate):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
@@ -414,4 +410,10 @@ TODO
     - Use numpy matmul functions for inner loops
 - Parallelize feed forward for each item in a batch across multiple processes
   using multiprocessing, then apply backpropagation in a single process
+  - Allocate the network in a shared memory buffer for all parameters
+    (like weights and biases):
+    https://docs.python.org/3/library/multiprocessing.shared_memory.html
+  - Use https://docs.python.org/3/library/stdtypes.html#memoryview to treat
+    the parameters as basic arrays that can be used in forward/backward
+
 """
