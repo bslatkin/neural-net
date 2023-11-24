@@ -14,7 +14,7 @@ class Layer:
     def size(self):
         raise NotImplementedError
 
-    def connect(self, buffer):
+    def connect(self, parameters):
         raise NotImplementedError
 
     def initialize(self):
@@ -61,13 +61,13 @@ class FullyConnected(Layer):
         biases_size = self.output_count
         return weights_size + biases_size
 
-    def connect(self, buffer):
+    def connect(self, parameters):
         output_bytes = self.output_count * PARAMETER_SIZE_BYTES
 
-        self.biases = buffer[:output_bytes].cast(
+        self.biases = parameters[:output_bytes].cast(
             TYPE_FORMAT, shape=(self.output_count,))
 
-        self.weights = buffer[output_bytes:].cast(
+        self.weights = parameters[output_bytes:].cast(
             TYPE_FORMAT, shape=(self.input_count, self.output_count))
 
     def initialize(self):
@@ -240,7 +240,7 @@ class Activation(Layer):
     def size(self):
         return 0
 
-    def connect(self, buffer):
+    def connect(self, parameters):
         pass
 
     def initialize(self):
@@ -342,23 +342,32 @@ class Network:
         self.layers.append(layer)
 
 
-def connect_network(network):
+def network_parameters_bytes(network):
     total_size = 0
     for layer in network.layers:
         total_size += layer.size()
 
     total_bytes = PARAMETER_SIZE_BYTES * total_size
-    buffer = memoryview(bytearray(total_bytes))
+    return total_bytes
 
+
+def create_network_parameters(network):
+    total_bytes = network_parameters_bytes(network)
+    parameters = memoryview(bytearray(total_bytes))
+    return parameters
+
+
+def connect_network(network, parameters):
     offset_bytes = 0
+
     for layer in network.layers:
         next_size = layer.size()
         next_bytes = PARAMETER_SIZE_BYTES * next_size
-        next_buffer = buffer[offset_bytes:offset_bytes+next_bytes]
-        layer.connect(next_buffer)
+        next_parameters = parameters[offset_bytes:offset_bytes+next_bytes]
+        layer.connect(next_parameters)
         offset_bytes += next_bytes
 
-    return buffer
+    return parameters
 
 
 def initialize_network(network):
