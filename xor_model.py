@@ -13,7 +13,7 @@ def test_xor():
         loss_derivative=mean_squared_error_derivative,
         epochs=10_000,
         batch_size=2,
-        parallelism=1,
+        parallelism=2,
         learning_rate=0.1)
 
     executor, parameters = create_thread_executor(network, config)
