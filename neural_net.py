@@ -405,10 +405,13 @@ def create_process_executor(network, config):
     total_bytes = network_parameters_bytes(network)
     parameters = multiprocessing.shared_memory.SharedMemory(
         create=True, size=total_bytes)
+    # XXX this won't work because the network object will keep getting
+    # passed to the child
     executor = concurrent.futures.ProcessPoolExecutor(
         initializer=None,
         initargs=(network, config, parameters.name),
         max_workers=config.parallelism)
+    connect_network(network, parameters)
     return executor, parameters
 
 
