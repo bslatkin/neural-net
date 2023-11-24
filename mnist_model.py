@@ -52,7 +52,7 @@ def load_mnist_data(features_path, labels_path):
         normalized_pixels = [p / 255.0 for p in pixels]
         result.append((normalized_pixels, label_bits))
 
-    return result
+    return result[:1000]
 
 
 def argmax(vector):
@@ -77,24 +77,26 @@ config = TrainingConfig(
 
 
 def train_mnist(train_examples, model_path, *, resume_path=None):
+    network = Network()
+    network.add(FullyConnected(28*28, 100))
+    network.add(Activation(100, sigmoid, sigmoid_derivative))
+    network.add(FullyConnected(100, 50))
+    network.add(Activation(50, sigmoid, sigmoid_derivative))
+    network.add(FullyConnected(50, 10))
+    network.add(Activation(10, sigmoid, sigmoid_derivative))
+
+    buffer = connect_network(network)
+
     if resume_path:
         with open(resume_path, 'rb') as f:
-            network = pickle.load(f)
+            f.readinto(buffer)
     else:
-        network = Network()
-        network.add(FullyConnected(28*28, 100))
-        network.add(Activation(100, sigmoid, sigmoid_derivative))
-        network.add(FullyConnected(100, 50))
-        network.add(Activation(50, sigmoid, sigmoid_derivative))
-        network.add(FullyConnected(50, 10))
-        network.add(Activation(10, sigmoid, sigmoid_derivative))
-
         initialize_network(network)
 
     train(network, config, train_examples)
 
     with open(model_path, 'wb') as f:
-        pickle.dump(network, f)
+        f.write(buffer)
 
 
 def eval_mnist(test_examples, model_path):

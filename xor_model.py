@@ -8,6 +8,8 @@ def test_xor():
     network.add(FullyConnected(3, 1))
     network.add(Activation(1, sigmoid, sigmoid_derivative))
 
+    connect_network(network)
+
     initialize_network(network)
 
     config = TrainingConfig(

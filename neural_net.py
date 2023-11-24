@@ -14,7 +14,10 @@ class Layer:
     def size(self):
         raise NotImplementedError
 
-    def initialize(self, buffer):
+    def connect(self, buffer):
+        raise NotImplementedError
+
+    def initialize(self):
         raise NotImplementedError
 
     def forward(self, input_matrix):
@@ -58,10 +61,16 @@ class FullyConnected(Layer):
         biases_size = self.output_count
         return weights_size + biases_size
 
-    def initialize(self, buffer):
+    def connect(self, buffer):
         output_bytes = self.output_count * PARAMETER_SIZE_BYTES
+
         self.biases = buffer[:output_bytes].cast(
             TYPE_FORMAT, shape=(self.output_count,))
+
+        self.weights = buffer[output_bytes:].cast(
+            TYPE_FORMAT, shape=(self.input_count, self.output_count))
+
+    def initialize(self):
         for j in range(self.output_count):
             bias_j = random.normalvariate(mu=0, sigma=1)
             self.biases[j] = bias_j
@@ -69,9 +78,6 @@ class FullyConnected(Layer):
         # Rows are number of inputs
         # Columns are number of outputs
         # Column vectors are the weights for one output
-        self.weights = buffer[output_bytes:].cast(
-            TYPE_FORMAT, shape=(self.input_count, self.output_count))
-
         for i in range(self.input_count):
             for j in range(self.output_count):
                 weight_ij = random.normalvariate(mu=0, sigma=1)
@@ -234,7 +240,10 @@ class Activation(Layer):
     def size(self):
         return 0
 
-    def initialize(self, buffer):
+    def connect(self, buffer):
+        pass
+
+    def initialize(self):
         pass
 
     def forward(self, input_matrix):
@@ -333,11 +342,10 @@ class Network:
         self.layers.append(layer)
 
 
-def initialize_network(network):
+def connect_network(network):
     total_size = 0
     for layer in network.layers:
         total_size += layer.size()
-
 
     total_bytes = PARAMETER_SIZE_BYTES * total_size
     buffer = memoryview(bytearray(total_bytes))
@@ -347,8 +355,15 @@ def initialize_network(network):
         next_size = layer.size()
         next_bytes = PARAMETER_SIZE_BYTES * next_size
         next_buffer = buffer[offset_bytes:offset_bytes+next_bytes]
-        layer.initialize(next_buffer)
+        layer.connect(next_buffer)
         offset_bytes += next_bytes
+
+    return buffer
+
+
+def initialize_network(network):
+    for layer in network.layers:
+        layer.initialize()
 
 
 class TrainingConfig:
