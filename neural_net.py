@@ -383,6 +383,10 @@ def feed_forward(network, input_matrix):
 def train_shard(network, config, shard):
     input_matrix, expected_output = zip(*shard)
 
+    # Why even have shards within a batch? Why not just run one example in each
+    # shard? The reason is that you might be able to utilize in-core
+    # parallelism, such as SIMD instructions, if you process many inputs
+    # at the same time on the same core (e.g., using NumPy).
     history, output = feed_forward(network, input_matrix)
 
     mse = config.loss(expected_output, output)

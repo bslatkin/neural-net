@@ -70,9 +70,10 @@ def argmax(vector):
 config = TrainingConfig(
     loss=mean_squared_error,
     loss_derivative=mean_squared_error_derivative,
-    epochs=10,
+    epochs=1,
     batch_size=128,
-    learning_rate=0.01)
+    parallelism=2,
+    learning_rate=0.05)
 
 
 def train_mnist(train_examples, model_path, *, resume_path=None):
@@ -87,6 +88,8 @@ def train_mnist(train_examples, model_path, *, resume_path=None):
         network.add(Activation(50, sigmoid, sigmoid_derivative))
         network.add(FullyConnected(50, 10))
         network.add(Activation(10, sigmoid, sigmoid_derivative))
+
+        initialize_network(network)
 
     train(network, config, train_examples)
 
