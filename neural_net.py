@@ -20,7 +20,10 @@ class Layer:
     def forward(self, input_matrix):
         raise NotImplementedError
 
-    def backward(self, output_error_matrix, learning_rate):
+    def backward(self, last_input_matrix, output_error_matrix):
+        raise NotImplementedError
+
+    def update(self, config, update_data):
         raise NotImplementedError
 
 
@@ -107,7 +110,7 @@ class FullyConnected(Layer):
 
         return result
 
-    def backward(self, last_input_matrix, output_error_matrix, config):
+    def backward(self, last_input_matrix, output_error_matrix):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
         batch_size = len(output_error_matrix)
@@ -179,6 +182,13 @@ class FullyConnected(Layer):
 
         # print(f'{self.__class__.__name__}{id(self)}: InputError={input_error}')
 
+        update_data = bias_error, weights_error
+        return input_error, update_data
+        # XXX split these updates up
+
+    def update(self, config, update_data):
+        bias_error, weights_error = update_data
+
         # Update the biases
         for j in range(self.output_count):
             bias_error_j = bias_error[j]
@@ -190,8 +200,6 @@ class FullyConnected(Layer):
                 weights_error_ij = weights_error[i][j]
                 delta = config.learning_rate * weights_error_ij
                 self.weights[i, j] -= delta
-
-        return input_error
 
     # def __repr__(self):
     #     return (
@@ -243,7 +251,7 @@ class Activation(Layer):
 
         return result
 
-    def backward(self, last_input_matrix, output_error_matrix, learning_rate):
+    def backward(self, last_input_matrix, output_error_matrix):
         # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
 
         batch_size = len(last_input_matrix)
@@ -263,7 +271,11 @@ class Activation(Layer):
 
             result.append(input_error_b)
 
-        return result
+        update_data = None
+        return result, update_data
+
+    def update(self, config, update_data):
+        pass
 
     # def __repr__(self):
     #     return f'{self.__class__.__name__}()'
@@ -368,8 +380,8 @@ def feed_forward(network, input_matrix):
     return history, output
 
 
-def train_batch(network, config, batch):
-    input_matrix, expected_output = zip(*batch)
+def train_shard(network, config, shard):
+    input_matrix, expected_output = zip(*shard)
 
     history, output = feed_forward(network, input_matrix)
 
@@ -377,15 +389,57 @@ def train_batch(network, config, batch):
     output_error = config.loss_derivative(expected_output, output)
     # print(f'LossDerivative={output_error}')
 
-    for layer, last_input in zip(reversed(network.layers), reversed(history)):
-        output_error = layer.backward(last_input, output_error, config)
+    all_updates = []
 
-    return mse
+    items = list(zip(range(len(network.layers)), network.layers, history))
+
+    for layer_index, layer, last_input in reversed(items):
+        input_error, update_data = layer.backward(last_input, output_error)
+        output_error = input_error
+        all_updates.append((layer_index, update_data))
+
+    return mse, all_updates
 
 
-def iter_batch(examples, batch_size):
-    for i in range(0, len(examples), batch_size):
-        next_slice = examples[i:i+batch_size]
+def train_batch(network, config, batch):
+    error_sum = 0
+    error_count = 0
+    all_updates = []
+
+    # This step is parallelizable, where each shard can be computed on a
+    # separate thread / core / machine and the update gradients are
+    # retrieved for that portion of the batch.
+    for shard in batch:
+        mse, updates = train_shard(network, config, shard)
+        error_sum += sum(mse)
+        error_count += len(shard)
+        all_updates.extend(updates)
+
+    # This is the "all to all" step, where the model weights and biases for
+    # each layer are updated based on the error gradients computed in parallel
+    # for the step above.
+    for layer_index, update_data in all_updates:
+        network.layers[layer_index].update(config, update_data)
+
+    return error_sum, error_count
+
+
+def iter_grouped(items, group_size):
+    it = iter(items)
+
+    while True:
+        next_slice = []
+        for _ in range(group_size):
+            try:
+                next_item = next(it)
+            except StopIteration:
+                if next_slice:
+                    yield next_slice
+
+                return
+            else:
+                next_slice.append(next_item)
+
         yield next_slice
 
 
@@ -394,26 +448,25 @@ def train(network, config, examples):
     # for i, layer in enumerate(network.layers, 1):
         # print(f'Layer {i}: {layer}')
 
-    random.shuffle(examples)
-
     for epoch_index in range(config.epochs):
-        error_sum = 0
-        error_count = 0
+        random.shuffle(examples)
 
-        # random.shuffle(examples)
+        shard_size = config.batch_size // config.parallelism
+        shard_it = iter_grouped(examples, shard_size)
+        batch_it = iter_grouped(shard_it, config.parallelism)
 
-        for i, batch in enumerate(iter_batch(examples, config.batch_size)):
-            mse = train_batch(network, config, batch)
-            error_sum += sum(mse)
-            error_count += len(batch)
+        total_error_sum = 0
+        total_error_count = 0
 
+        for batch in batch_it:
+            error_sum, error_count = train_batch(network, config, batch)
+            total_error_sum += error_sum
+            total_error_count += error_count
+            avg_error = total_error_sum / float(total_error_count)
             print(
                 f'Epoch={epoch_index+1}, '
-                f'Examples={error_count}, '
-                f'AvgError={error_sum/error_count:.10f}')
-
-            # for i, layer in enumerate(network.layers, 1):
-            #     print(f'Layer {i}: {layer}')
+                f'Examples={total_error_count}, '
+                f'AvgError={avg_error:.10f}')
 
 
 def predict(network, input_vector):
