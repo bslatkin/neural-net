@@ -76,8 +76,9 @@ config = TrainingConfig(
     learning_rate=0.05)
 
 
-def train_mnist(train_examples, model_path, *, resume_path=None):
+def create_network(resume_path):
     network = Network()
+
     network.add(FullyConnected(28*28, 100))
     network.add(Activation(100, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(100, 50))
@@ -93,15 +94,19 @@ def train_mnist(train_examples, model_path, *, resume_path=None):
     else:
         initialize_network(network)
 
-    train(network, config, train_examples)
+    return network, buffer
 
-    with open(model_path, 'wb') as f:
+
+def train_mnist(train_examples, output_path, *, resume_path=None):
+    network, buffer = create_network(resume_path)
+    train(network, config, train_examples)
+    print(f'Outputting model checkpoint to {output_path!r}')
+    with open(output_path, 'wb') as f:
         f.write(buffer)
 
 
-def eval_mnist(test_examples, model_path):
-    with open(model_path, 'rb') as f:
-        network = pickle.load(f)
+def eval_mnist(test_examples, resume_path):
+    network, _ = create_network(resume_path)
 
     error_sum = 0
     error_count = 0
@@ -136,11 +141,12 @@ def eval_mnist(test_examples, model_path):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-train_mnist(
-    load_mnist_data(sys.argv[1], sys.argv[2]),
-    'mnist.pickle3')
+# train_mnist(
+#     load_mnist_data(sys.argv[1], sys.argv[2]),
+#     'mnist.bin',
+#     resume_path='mnist.bin')
 
 
 eval_mnist(
     load_mnist_data(sys.argv[3], sys.argv[4]),
-    'mnist.pickle3')
+    'mnist.bin')
