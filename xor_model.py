@@ -8,10 +8,6 @@ def test_xor():
     network.add(FullyConnected(3, 1))
     network.add(Activation(1, sigmoid, sigmoid_derivative))
 
-    parameters = create_network_parameters(network)
-    connect_network(network, parameters)
-    initialize_network(network)
-
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
@@ -20,6 +16,9 @@ def test_xor():
         parallelism=1,
         learning_rate=0.1)
 
+    executor, parameters = create_thread_executor(network, config)
+    initialize_network(network)
+
     labeled_examples = [
         ((0, 0), (0,)),
         ((0, 1), (1,)),
@@ -27,7 +26,7 @@ def test_xor():
         ((1, 1), (0,)),
     ]
 
-    train(network, config, labeled_examples)
+    train(network, config, executor, labeled_examples)
 
     test_examples = labeled_examples
 

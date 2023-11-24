@@ -1,6 +1,8 @@
 # Attempting to implement https://towardsdatascience.com/math-neural-network-from-scratch-in-python-d6da9f29ce65
 
+import concurrent.futures
 import math
+import multiprocessing.shared_memory
 import random
 import struct
 import sys
@@ -375,6 +377,41 @@ def initialize_network(network):
         layer.initialize()
 
 
+EXECUTOR_NETWORK = None
+EXECUTOR_CONFIG = None
+
+
+def create_thread_executor(network, config):
+    global EXECUTOR_NETWORK, EXECUTOR_CONFIG
+    EXECUTOR_NETWORK = network
+    EXECUTOR_CONFIG = config
+    parameters = create_network_parameters(network)
+    connect_network(network, parameters)
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=config.parallelism)
+    return executor, parameters
+
+
+def init_process(network, config, shared_memory_name):
+    global EXECUTOR_NETWORK
+    EXECUTOR_NETWORK = network
+    EXECUTOR_CONFIG = config
+    parameters = multiprocessing.shared_memory.SharedMemory(
+        name=shared_memory_name)
+    connect_network(network, parameters)
+
+
+def create_process_executor(network, config):
+    total_bytes = network_parameters_bytes(network)
+    parameters = multiprocessing.shared_memory.SharedMemory(
+        create=True, size=total_bytes)
+    executor = concurrent.futures.ProcessPoolExecutor(
+        initializer=None,
+        initargs=(network, config, parameters.name),
+        max_workers=config.parallelism)
+    return executor, parameters
+
+
 class TrainingConfig:
     def __init__(self,
                  *,
@@ -429,7 +466,15 @@ def train_shard(network, config, shard):
     return mse, all_updates
 
 
-def train_batch(network, config, batch):
+def train_map(shard):
+    # This implicitly passes the network and config from the global state
+    # which will have been configured appropriately for threads of multiple
+    # processes depending on the mode of operation.
+    print(f'In the thread processing {shard=}')
+    return train_shard(EXECUTOR_NETWORK, EXECUTOR_CONFIG, shard)
+
+
+def train_batch(network, config, executor, batch):
     error_sum = 0
     error_count = 0
     all_updates = []
@@ -437,10 +482,12 @@ def train_batch(network, config, batch):
     # This step is parallelizable, where each shard can be computed on a
     # separate thread / core / machine and the update gradients are
     # retrieved for that portion of the batch.
-    for shard in batch:
-        mse, updates = train_shard(network, config, shard)
+    # for shard in batch:
+    print(f'Mapping across {batch=}')
+
+    for mse, updates in executor.map(train_map, batch):
         error_sum += sum(mse)
-        error_count += len(shard)
+        error_count += len(updates)
         all_updates.extend(updates)
 
     # This is the "all to all" step, where the model weights and biases for
@@ -471,7 +518,7 @@ def iter_grouped(items, group_size):
         yield next_slice
 
 
-def train(network, config, examples):
+def train(network, config, executor, examples):
     print('Start training')
     # for i, layer in enumerate(network.layers, 1):
         # print(f'Layer {i}: {layer}')
@@ -487,14 +534,14 @@ def train(network, config, examples):
         total_error_count = 0
 
         for batch in batch_it:
-            error_sum, error_count = train_batch(network, config, batch)
+            error_sum, error_count = train_batch(network, config, executor, batch)
             total_error_sum += error_sum
             total_error_count += error_count
-            avg_error = total_error_sum / float(total_error_count)
-            print(
-                f'Epoch={epoch_index+1}, '
-                f'Examples={total_error_count}, '
-                f'AvgError={avg_error:.10f}')
+            # avg_error = total_error_sum / float(total_error_count)
+            # print(
+            #     f'Epoch={epoch_index+1}, '
+            #     f'Examples={total_error_count}, '
+            #     f'AvgError={avg_error:.10f}')
 
 
 def predict(network, input_vector):
