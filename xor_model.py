@@ -8,11 +8,14 @@ def test_xor():
     network.add(FullyConnected(3, 1))
     network.add(Activation(1, sigmoid, sigmoid_derivative))
 
+    initialize_network(network)
+
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=10_000,
         batch_size=2,
+        parallelism=1,
         learning_rate=0.1)
 
     labeled_examples = [

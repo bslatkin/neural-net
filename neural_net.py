@@ -2,10 +2,21 @@
 
 import math
 import random
+import struct
 import sys
 
 
+TYPE_FORMAT = 'f'
+PARAMETER_SIZE_BYTES = struct.calcsize(TYPE_FORMAT)
+
+
 class Layer:
+    def size(self):
+        raise NotImplementedError
+
+    def initialize(self, buffer):
+        raise NotImplementedError
+
     def forward(self, input_matrix):
         raise NotImplementedError
 
@@ -37,35 +48,43 @@ class FullyConnected(Layer):
         self.input_count = input_count
         self.output_count = output_count
 
+    def size(self):
+        # One weight for each input/output pair
+        weights_size = self.input_count * self.output_count
         # One bias for each output
-        self.biases = []
+        biases_size = self.output_count
+        return weights_size + biases_size
+
+    def initialize(self, buffer):
+        output_bytes = self.output_count * PARAMETER_SIZE_BYTES
+        self.biases = buffer[:output_bytes].cast(
+            TYPE_FORMAT, shape=(self.output_count,))
         for j in range(self.output_count):
-            bias_j = random.uniform(-0.5, 0.5)
-            self.biases.append(bias_j)
+            bias_j = random.normalvariate(mu=0, sigma=1)
+            self.biases[j] = bias_j
 
         # Rows are number of inputs
         # Columns are number of outputs
         # Column vectors are the weights for one output
-        self.weights = []
+        self.weights = buffer[output_bytes:].cast(
+            TYPE_FORMAT, shape=(self.input_count, self.output_count))
 
         for i in range(self.input_count):
-            weights_i = []
-
             for j in range(self.output_count):
-                weight_ij = random.uniform(-0.5, 0.5)
-                weights_i.append(weight_ij)
-
-            self.weights.append(weights_i)
+                weight_ij = random.normalvariate(mu=0, sigma=1)
+                self.weights[i, j] = weight_ij
 
     def forward(self, input_matrix):
         # Row vectors are the inputs for one batch
-        # Each column is an input value for that specific example
+        # Each column within a row is an input value for that specific example
         batch_size = len(input_matrix)
-        input_count = len(input_matrix[0])
 
-        assert input_count == self.input_count, \
-            f'{input_count=} == {self.input_count=}'
-
+        # TODO: Consider using a pre-allocated array for this hidden state
+        # for each iteration instead of reallocating it every time through.
+        # Or possibly pass in the hidden state vector from the outside so
+        # the memory buffer can be centrally manged and synchronized. Needs
+        # to allow multiple forward() calls at the same time from different
+        # threads/processes using the network parameters as shared memory.
         result = []
 
         # Output has batch size rows, output size columns
@@ -79,7 +98,7 @@ class FullyConnected(Layer):
 
                 for i in range(self.input_count):
                     x_i = input_b[i]
-                    weight_ij = self.weights[i][j]
+                    weight_ij = self.weights[i, j]
                     output_j += x_i * weight_ij
 
                 output_b.append(output_j)
@@ -152,7 +171,7 @@ class FullyConnected(Layer):
 
         for i in range(self.input_count):
             for j in range(self.output_count):
-                weight_ij = self.weights[i][j]
+                weight_ij = self.weights[i, j]
 
                 for batch_index in range(batch_size):
                     output_error_bj = output_error_matrix[batch_index][j]
@@ -170,15 +189,15 @@ class FullyConnected(Layer):
             for j in range(self.output_count):
                 weights_error_ij = weights_error[i][j]
                 delta = config.learning_rate * weights_error_ij
-                self.weights[i][j] -= delta
+                self.weights[i, j] -= delta
 
         return input_error
 
-    def __repr__(self):
-        return (
-            f'{self.__class__.__name__}('
-            f'biases={self.biases}, '
-            f'weights={self.weights})')
+    # def __repr__(self):
+    #     return (
+    #         f'{self.__class__.__name__}('
+    #         f'biases={self.biases}, '
+    #         f'weights={self.weights})')
 
 
 def sigmoid(input_vector):
@@ -203,6 +222,12 @@ class Activation(Layer):
         self.count = count
         self.function = function
         self.function_derivative = function_derivative
+
+    def size(self):
+        return 0
+
+    def initialize(self, buffer):
+        pass
 
     def forward(self, input_matrix):
         batch_size = len(input_matrix)
@@ -240,8 +265,8 @@ class Activation(Layer):
 
         return result
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}()'
+    # def __repr__(self):
+    #     return f'{self.__class__.__name__}()'
 
 
 def mean_squared_error(desired_matrix, found_matrix):
@@ -296,6 +321,24 @@ class Network:
         self.layers.append(layer)
 
 
+def initialize_network(network):
+    total_size = 0
+    for layer in network.layers:
+        total_size += layer.size()
+
+
+    total_bytes = PARAMETER_SIZE_BYTES * total_size
+    buffer = memoryview(bytearray(total_bytes))
+
+    offset_bytes = 0
+    for layer in network.layers:
+        next_size = layer.size()
+        next_bytes = PARAMETER_SIZE_BYTES * next_size
+        next_buffer = buffer[offset_bytes:offset_bytes+next_bytes]
+        layer.initialize(next_buffer)
+        offset_bytes += next_bytes
+
+
 class TrainingConfig:
     def __init__(self,
                  *,
@@ -303,11 +346,13 @@ class TrainingConfig:
                  loss_derivative,
                  epochs,
                  batch_size,
+                 parallelism,
                  learning_rate):
         self.loss = loss
         self.loss_derivative = loss_derivative
         self.epochs = epochs
         self.batch_size = batch_size
+        self.parallelism = parallelism
         self.learning_rate = learning_rate
 
 
@@ -328,8 +373,6 @@ def train_batch(network, config, batch):
 
     history, output = feed_forward(network, input_matrix)
 
-    # TODO: For batching, the output error gradient would be averaged
-    # across all of the samples in the batch.
     mse = config.loss(expected_output, output)
     output_error = config.loss_derivative(expected_output, output)
     # print(f'LossDerivative={output_error}')
