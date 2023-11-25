@@ -1,4 +1,4 @@
-import pickle
+import concurrent.futures
 import struct
 import sys
 
@@ -68,7 +68,7 @@ def argmax(vector):
 
 
 def create_network():
-    network = Network()
+    network = Network(PARAMETER_SIZE_BYTES)
     network.add(FullyConnected(28*28, 100))
     network.add(Activation(100, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(100, 50))
@@ -81,24 +81,25 @@ def create_network():
 def train_mnist(train_examples, output_path, *, resume_path=None):
     network = create_network()
 
-    config = TrainingConfig(
-        loss=mean_squared_error,
-        loss_derivative=mean_squared_error_derivative,
-        epochs=1,
-        batch_size=128,
-        parallelism=8,
-        learning_rate=0.001)
-
-    executor, parameters = create_process_executor(
-        create_network, config)
-
-    connect_network(network, parameters)
+    parameters = network.allocate_parameters()
+    network.connect(parameters)
 
     if resume_path:
         with open(resume_path, 'rb') as f:
             f.readinto(parameters)
     else:
-        initialize_network(network)
+        network.initialize()
+
+    config = TrainingConfig(
+        loss=mean_squared_error,
+        loss_derivative=mean_squared_error_derivative,
+        epochs=1,
+        batch_size=128,
+        parallelism=12,
+        learning_rate=0.001)
+
+    executor = concurrent.futures.ProcessPoolExecutor(
+        max_workers=config.parallelism)
 
     train(network, config, executor, train_examples)
     print(f'Outputting model checkpoint to {output_path!r}')
@@ -108,12 +109,14 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
 
 def eval_mnist(test_examples, resume_path):
     network = create_network()
-    parameters = create_network_parameters(network)
-    connect_network(network, parameters)
-    loss = mean_squared_error
+
+    parameters = network.allocate_parameters()
+    network.connect(parameters)
 
     with open(resume_path, 'rb') as f:
         f.readinto(parameters)
+
+    loss = mean_squared_error
 
     error_sum = 0
     error_count = 0
@@ -151,10 +154,10 @@ def eval_mnist(test_examples, resume_path):
 
 
 if __name__ == '__main__':
-    # train_mnist(
-    #     load_mnist_data(sys.argv[1], sys.argv[2]),
-    #     'mnist.bin',
-    #     resume_path='mnist.bin')
+    train_mnist(
+        load_mnist_data(sys.argv[1], sys.argv[2]),
+        'mnist.bin3')
+        # resume_path='mnist.bin')
 
     # eval_mnist(
     #     load_mnist_data(sys.argv[3], sys.argv[4]),
