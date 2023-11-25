@@ -84,24 +84,30 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
     parameters = network.allocate_parameters()
     network.connect(parameters)
 
+    print(f'Model parameters are {len(parameters)} bytes')
+
     if resume_path:
         with open(resume_path, 'rb') as f:
             f.readinto(parameters)
     else:
         network.initialize()
 
+    # A bigger batch size is better when the number of model parameters is
+    # larger, since the whole model will be serialized for each shard that's
+    # processed in parallel. Larger batches will amortize that serialization.
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=1,
-        batch_size=128,
-        parallelism=12,
-        learning_rate=0.001)
+        batch_size=1024,
+        parallelism=8,
+        learning_rate=0.1)
 
     executor = concurrent.futures.ProcessPoolExecutor(
         max_workers=config.parallelism)
 
     train(network, config, executor, train_examples)
+
     print(f'Outputting model checkpoint to {output_path!r}')
     with open(output_path, 'wb') as f:
         f.write(parameters)
@@ -122,7 +128,7 @@ def eval_mnist(test_examples, resume_path):
     error_count = 0
     correct_count = 0
 
-    test_examples = random.sample(test_examples, 1000)
+    test_examples = random.sample(test_examples, 100)
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
@@ -156,9 +162,9 @@ def eval_mnist(test_examples, resume_path):
 if __name__ == '__main__':
     train_mnist(
         load_mnist_data(sys.argv[1], sys.argv[2]),
-        'mnist.bin3')
-        # resume_path='mnist.bin')
+        'mnist.bin5')
+        # resume_path='mnist.bin3')
 
-    # eval_mnist(
-    #     load_mnist_data(sys.argv[3], sys.argv[4]),
-    #     'mnist.bin')
+    eval_mnist(
+        load_mnist_data(sys.argv[3], sys.argv[4]),
+        'mnist.bin5')

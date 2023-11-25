@@ -1,8 +1,6 @@
 # Attempting to implement https://towardsdatascience.com/math-neural-network-from-scratch-in-python-d6da9f29ce65
 
-import concurrent.futures
 import math
-import multiprocessing.shared_memory
 import random
 import struct
 import sys
@@ -464,20 +462,18 @@ def train(network, config, executor, examples):
         shard_it = iter_grouped(examples, shard_size)
         batch_it = iter_grouped(shard_it, config.parallelism)
 
-        total_error_sum = 0
-        total_error_count = 0
+        total_examples_count = 0
 
         for batch in batch_it:
-            error_sum, error_count = train_batch(
+            error_sum, examples_count = train_batch(
                 network, config, executor, batch)
 
-            total_error_sum += error_sum
-            total_error_count += error_count
-            avg_error = total_error_sum / float(total_error_count)
+            total_examples_count += examples_count
+            avg_error = error_sum / float(examples_count)
 
             print(
                 f'Epoch={epoch_index+1}, '
-                f'Examples={total_error_count}, '
+                f'Examples={total_examples_count}, '
                 f'AvgError={avg_error:.10f}')
 
 
@@ -509,21 +505,10 @@ def profile_func(func, *args, **kwargs):
 
 """
 TODO
-- Allow for resuming training from a previous network
-- Allow control-C to interrupt the training and save a clean snapshot; need
-  to run the training on another thread to make this work right.
 - Compare performance:
     - Use batch-size-efficient generated matmul functions for inner loops
     - Use C-extension matmul functions for inner loops
     - Use numpy matmul functions for inner loops
-- Parallelize feed forward for each item in a batch across multiple processes
-  using multiprocessing, then apply backpropagation in a single process
-  - Allocate the network in a shared memory buffer for all parameters
-    (like weights and biases):
-    https://docs.python.org/3/library/multiprocessing.shared_memory.html
-  - Use https://docs.python.org/3/library/stdtypes.html#memoryview to treat
-    the parameters as basic arrays that can be used in forward/backward
-
 """
 
 
