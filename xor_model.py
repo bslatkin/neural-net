@@ -1,23 +1,28 @@
+import concurrent.futures
 from neural_net import *
 
 
 def test_xor():
-    network = Network()
+    network = Network(PARAMETER_SIZE_BYTES)
     network.add(FullyConnected(2, 3))
     network.add(Activation(3, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(3, 1))
     network.add(Activation(1, sigmoid, sigmoid_derivative))
 
+    parameters = network.allocate_parameters()
+    network.connect(parameters)
+    network.initialize()
+
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=10_000,
-        batch_size=2,
-        parallelism=2,
+        batch_size=4,
+        parallelism=1,
         learning_rate=0.1)
 
-    executor, parameters = create_thread_executor(network, config)
-    initialize_network(network)
+    executor = concurrent.futures.ProcessPoolExecutor(
+        max_workers=config.parallelism)
 
     labeled_examples = [
         ((0, 0), (0,)),
@@ -44,4 +49,5 @@ def test_xor():
     print(f'AvgError={error_sum/error_count:.10f}')
 
 
-test_xor()
+if __name__ == '__main__':
+    test_xor()

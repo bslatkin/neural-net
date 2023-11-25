@@ -13,7 +13,7 @@ PARAMETER_SIZE_BYTES = struct.calcsize(TYPE_FORMAT)
 
 
 class Layer:
-    def size(self):
+    def parameters_count(self):
         raise NotImplementedError
 
     def connect(self, parameters):
@@ -32,31 +32,24 @@ class Layer:
         raise NotImplementedError
 
 
-def dot_product(a, b):
-    result = 0
-    for a_i, b_i in zip(a, b):
-        result += a_i * b_i
-    return result
-
-
-# def matrix_multiply(a, b):
-#     # rows are first dimension, columns second dimension
-#     result = []
-#     for row in a:
-
-#         for column in b:
-
-
-
-
-
-
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
         self.input_count = input_count
         self.output_count = output_count
+        self.parameters = None
 
-    def size(self):
+    def __getstate__(self):
+        return dict(
+            input_count=self.input_count,
+            output_count=self.output_count,
+            parameters=self.parameters)
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if self.parameters:
+            self.connect(self.parameters)
+
+    def parameters_count(self):
         # One weight for each input/output pair
         weights_size = self.input_count * self.output_count
         # One bias for each output
@@ -64,12 +57,16 @@ class FullyConnected(Layer):
         return weights_size + biases_size
 
     def connect(self, parameters):
+        self.parameters = parameters
+
+        view = memoryview(self.parameters)
+
         output_bytes = self.output_count * PARAMETER_SIZE_BYTES
 
-        self.biases = parameters[:output_bytes].cast(
+        self.biases = view[:output_bytes].cast(
             TYPE_FORMAT, shape=(self.output_count,))
 
-        self.weights = parameters[output_bytes:].cast(
+        self.weights = view[output_bytes:].cast(
             TYPE_FORMAT, shape=(self.input_count, self.output_count))
 
     def initialize(self):
@@ -96,6 +93,8 @@ class FullyConnected(Layer):
         # the memory buffer can be centrally manged and synchronized. Needs
         # to allow multiple forward() calls at the same time from different
         # threads/processes using the network parameters as shared memory.
+        # Alternatively could use a bytearray which will be efficiently
+        # serialized through a pickled channel.
         result = []
 
         # Output has batch size rows, output size columns
@@ -119,8 +118,6 @@ class FullyConnected(Layer):
         return result
 
     def backward(self, last_input_matrix, output_error_matrix):
-        # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
-
         batch_size = len(output_error_matrix)
 
         # Output error is ∂E/∂Y, each row is a batch, and each column in each
@@ -167,8 +164,6 @@ class FullyConnected(Layer):
 
                 weights_error[i][j] = delta
 
-        # print(f'{self.__class__.__name__}{id(self)}: WeightsError={weights_error}')
-
         # Same size as the input
         # Rows are batches
         # Columns are inputs
@@ -188,11 +183,8 @@ class FullyConnected(Layer):
                     output_error_bj = output_error_matrix[batch_index][j]
                     input_error[batch_index][i] += output_error_bj * weight_ij
 
-        # print(f'{self.__class__.__name__}{id(self)}: InputError={input_error}')
-
         update_data = bias_error, weights_error
         return input_error, update_data
-        # XXX split these updates up
 
     def update(self, config, update_data):
         bias_error, weights_error = update_data
@@ -208,12 +200,6 @@ class FullyConnected(Layer):
                 weights_error_ij = weights_error[i][j]
                 delta = config.learning_rate * weights_error_ij
                 self.weights[i, j] -= delta
-
-    # def __repr__(self):
-    #     return (
-    #         f'{self.__class__.__name__}('
-    #         f'biases={self.biases}, '
-    #         f'weights={self.weights})')
 
 
 def sigmoid(input_vector):
@@ -239,7 +225,7 @@ class Activation(Layer):
         self.function = function
         self.function_derivative = function_derivative
 
-    def size(self):
+    def parameters_count(self):
         return 0
 
     def connect(self, parameters):
@@ -261,8 +247,6 @@ class Activation(Layer):
         return result
 
     def backward(self, last_input_matrix, output_error_matrix):
-        # print(f'{self.__class__.__name__}{id(self)}: OutputError={output_error}')
-
         batch_size = len(last_input_matrix)
 
         result = []
@@ -285,9 +269,6 @@ class Activation(Layer):
 
     def update(self, config, update_data):
         pass
-
-    # def __repr__(self):
-    #     return f'{self.__class__.__name__}()'
 
 
 def mean_squared_error(desired_matrix, found_matrix):
@@ -335,88 +316,40 @@ def mean_squared_error_derivative(desired_matrix, found_matrix):
 
 
 class Network:
-    def __init__(self):
+    def __init__(self, parameter_size_bytes):
+        self.parameter_size_bytes = parameter_size_bytes
         self.layers = []
+        self.parameters = None
 
     def add(self, layer):
         self.layers.append(layer)
 
+    def parameters_bytes(self):
+        total_count = 0
+        for layer in self.layers:
+            total_count += layer.parameters_count()
 
-def network_parameters_bytes(network):
-    total_size = 0
-    for layer in network.layers:
-        total_size += layer.size()
+        total_bytes = self.parameter_size_bytes * total_count
+        return total_bytes
 
-    total_bytes = PARAMETER_SIZE_BYTES * total_size
-    return total_bytes
+    def allocate_parameters(self):
+        total_bytes = self.parameters_bytes()
+        parameters = bytearray(total_bytes)
+        return parameters
 
+    def connect(self, parameters):
+        self.parameters = parameters
+        offset_bytes = 0
+        for layer in self.layers:
+            next_count = layer.parameters_count()
+            next_bytes = self.parameter_size_bytes * next_count
+            next_parameters = parameters[offset_bytes:offset_bytes+next_bytes]
+            layer.connect(next_parameters)
+            offset_bytes += next_bytes
 
-def create_network_parameters(network):
-    total_bytes = network_parameters_bytes(network)
-    parameters = memoryview(bytearray(total_bytes))
-    return parameters
-
-
-def connect_network(network, parameters):
-    offset_bytes = 0
-
-    for layer in network.layers:
-        next_size = layer.size()
-        next_bytes = PARAMETER_SIZE_BYTES * next_size
-        next_parameters = parameters[offset_bytes:offset_bytes+next_bytes]
-        layer.connect(next_parameters)
-        offset_bytes += next_bytes
-
-    return parameters
-
-
-def initialize_network(network):
-    for layer in network.layers:
-        layer.initialize()
-
-
-EXECUTOR_NETWORK = None
-EXECUTOR_CONFIG = None
-MEMORY = None
-
-
-def create_thread_executor(create_network_func, config):
-    global EXECUTOR_NETWORK, EXECUTOR_CONFIG
-    EXECUTOR_NETWORK = create_network_func()
-    EXECUTOR_CONFIG = config
-    parameters = create_network_parameters(EXECUTOR_NETWORK)
-    connect_network(EXECUTOR_NETWORK, parameters)
-    executor = concurrent.futures.ThreadPoolExecutor(
-        max_workers=config.parallelism)
-    return executor, parameters
-
-
-def init_process(create_network_func, config, shared_memory_name):
-    global EXECUTOR_NETWORK, EXECUTOR_CONFIG, MEMORY
-    EXECUTOR_NETWORK = create_network_func()
-    EXECUTOR_CONFIG = config
-    MEMORY = multiprocessing.shared_memory.SharedMemory(
-        name=shared_memory_name)
-    parameters = MEMORY.buf
-    connect_network(EXECUTOR_NETWORK, parameters)
-
-
-def create_process_executor(create_network_func, config):
-    global MEMORY
-    network = create_network_func()
-    total_bytes = network_parameters_bytes(network)
-    # XXX how do you call unlink and close on this?
-    MEMORY = multiprocessing.shared_memory.SharedMemory(
-        create=True, size=total_bytes)
-    parameters = MEMORY.buf
-    # XXX this won't work because the network object will keep getting
-    # passed to the child
-    executor = concurrent.futures.ProcessPoolExecutor(
-        initializer=init_process,
-        initargs=(create_network_func, config, MEMORY.name),
-        max_workers=config.parallelism)
-    connect_network(network, parameters)
-    return executor, parameters
+    def initialize(self):
+        for layer in self.layers:
+            layer.initialize()
 
 
 class TrainingConfig:
@@ -459,7 +392,6 @@ def train_shard(network, config, shard):
 
     mse = config.loss(expected_output, output)
     output_error = config.loss_derivative(expected_output, output)
-    # print(f'LossDerivative={output_error}')
 
     all_updates = []
 
@@ -468,16 +400,10 @@ def train_shard(network, config, shard):
     for layer_index, layer, last_input in reversed(items):
         input_error, update_data = layer.backward(last_input, output_error)
         output_error = input_error
-        all_updates.append((layer_index, update_data))
+        if update_data:
+            all_updates.append((layer_index, update_data))
 
     return mse, len(shard), all_updates
-
-
-def train_map(shard):
-    # This implicitly passes the network and config from the global state
-    # which will have been configured appropriately for threads of multiple
-    # processes depending on the mode of operation.
-    return train_shard(EXECUTOR_NETWORK, EXECUTOR_CONFIG, shard)
 
 
 def train_batch(network, config, executor, batch):
@@ -489,7 +415,13 @@ def train_batch(network, config, executor, batch):
     # separate thread / core / machine and the update gradients are
     # retrieved for that portion of the batch.
     # for shard in batch:
-    for mse, count, updates in executor.map(train_map, batch):
+    all_futures = []
+    for shard in batch:
+        future = executor.submit(train_shard, network, config, shard)
+        all_futures.append(future)
+
+    for future in all_futures:
+        mse, count, updates = future.result()
         error_sum += sum(mse)
         error_count += count
         all_updates.extend(updates)
@@ -524,13 +456,11 @@ def iter_grouped(items, group_size):
 
 def train(network, config, executor, examples):
     print('Start training')
-    # for i, layer in enumerate(network.layers, 1):
-        # print(f'Layer {i}: {layer}')
 
     for epoch_index in range(config.epochs):
         random.shuffle(examples)
 
-        shard_size = config.batch_size // config.parallelism
+        shard_size = max(1, config.batch_size // config.parallelism)
         shard_it = iter_grouped(examples, shard_size)
         batch_it = iter_grouped(shard_it, config.parallelism)
 
@@ -540,9 +470,11 @@ def train(network, config, executor, examples):
         for batch in batch_it:
             error_sum, error_count = train_batch(
                 network, config, executor, batch)
+
             total_error_sum += error_sum
             total_error_count += error_count
             avg_error = total_error_sum / float(total_error_count)
+
             print(
                 f'Epoch={epoch_index+1}, '
                 f'Examples={total_error_count}, '
@@ -593,3 +525,23 @@ TODO
     the parameters as basic arrays that can be used in forward/backward
 
 """
+
+
+# TODO
+
+# def dot_product(a, b):
+#     result = 0
+#     for a_i, b_i in zip(a, b):
+#         result += a_i * b_i
+#     return result
+
+
+# def matrix_multiply(a, b):
+#     # rows are first dimension, columns second dimension
+#     result = []
+#     for row in a:
+
+#         for column in b:
+
+
+

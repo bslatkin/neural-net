@@ -156,6 +156,6 @@ if __name__ == '__main__':
     #     'mnist.bin',
     #     resume_path='mnist.bin')
 
-    eval_mnist(
-        load_mnist_data(sys.argv[3], sys.argv[4]),
-        'mnist.bin')
+    # eval_mnist(
+    #     load_mnist_data(sys.argv[3], sys.argv[4]),
+    #     'mnist.bin')
