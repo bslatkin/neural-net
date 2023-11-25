@@ -254,8 +254,6 @@ class Activation(Layer):
         result = []
 
         for batch_index in range(batch_size):
-            if batch_index >= len(input_matrix):
-                breakpoint()
             input_b = input_matrix[batch_index]
             output_b = self.function(input_b)
             result.append(output_b)
@@ -379,37 +377,43 @@ def initialize_network(network):
 
 EXECUTOR_NETWORK = None
 EXECUTOR_CONFIG = None
+MEMORY = None
 
 
-def create_thread_executor(network, config):
+def create_thread_executor(create_network_func, config):
     global EXECUTOR_NETWORK, EXECUTOR_CONFIG
-    EXECUTOR_NETWORK = network
+    EXECUTOR_NETWORK = create_network_func()
     EXECUTOR_CONFIG = config
-    parameters = create_network_parameters(network)
-    connect_network(network, parameters)
+    parameters = create_network_parameters(EXECUTOR_NETWORK)
+    connect_network(EXECUTOR_NETWORK, parameters)
     executor = concurrent.futures.ThreadPoolExecutor(
         max_workers=config.parallelism)
     return executor, parameters
 
 
-def init_process(network, config, shared_memory_name):
-    global EXECUTOR_NETWORK
-    EXECUTOR_NETWORK = network
+def init_process(create_network_func, config, shared_memory_name):
+    global EXECUTOR_NETWORK, EXECUTOR_CONFIG, MEMORY
+    EXECUTOR_NETWORK = create_network_func()
     EXECUTOR_CONFIG = config
-    parameters = multiprocessing.shared_memory.SharedMemory(
+    MEMORY = multiprocessing.shared_memory.SharedMemory(
         name=shared_memory_name)
-    connect_network(network, parameters)
+    parameters = MEMORY.buf
+    connect_network(EXECUTOR_NETWORK, parameters)
 
 
-def create_process_executor(network, config):
+def create_process_executor(create_network_func, config):
+    global MEMORY
+    network = create_network_func()
     total_bytes = network_parameters_bytes(network)
-    parameters = multiprocessing.shared_memory.SharedMemory(
+    # XXX how do you call unlink and close on this?
+    MEMORY = multiprocessing.shared_memory.SharedMemory(
         create=True, size=total_bytes)
+    parameters = MEMORY.buf
     # XXX this won't work because the network object will keep getting
     # passed to the child
     executor = concurrent.futures.ProcessPoolExecutor(
-        initializer=None,
-        initargs=(network, config, parameters.name),
+        initializer=init_process,
+        initargs=(create_network_func, config, MEMORY.name),
         max_workers=config.parallelism)
     connect_network(network, parameters)
     return executor, parameters
@@ -534,7 +538,8 @@ def train(network, config, executor, examples):
         total_error_count = 0
 
         for batch in batch_it:
-            error_sum, error_count = train_batch(network, config, executor, batch)
+            error_sum, error_count = train_batch(
+                network, config, executor, batch)
             total_error_sum += error_sum
             total_error_count += error_count
             avg_error = total_error_sum / float(total_error_count)

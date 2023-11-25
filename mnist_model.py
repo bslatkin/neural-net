@@ -52,7 +52,7 @@ def load_mnist_data(features_path, labels_path):
         normalized_pixels = [p / 255.0 for p in pixels]
         result.append((normalized_pixels, label_bits))
 
-    return result[:1000]
+    return result
 
 
 def argmax(vector):
@@ -86,10 +86,13 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
         loss_derivative=mean_squared_error_derivative,
         epochs=1,
         batch_size=128,
-        parallelism=1,
-        learning_rate=0.05)
+        parallelism=8,
+        learning_rate=0.001)
 
-    executor, parameters = create_process_executor(network, config)
+    executor, parameters = create_process_executor(
+        create_network, config)
+
+    connect_network(network, parameters)
 
     if resume_path:
         with open(resume_path, 'rb') as f:
@@ -115,6 +118,8 @@ def eval_mnist(test_examples, resume_path):
     error_sum = 0
     error_count = 0
     correct_count = 0
+
+    test_examples = random.sample(test_examples, 1000)
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
@@ -145,12 +150,12 @@ def eval_mnist(test_examples, resume_path):
         f'CorrectPercentage={100 * correct_count / error_count:.2f}%')
 
 
-train_mnist(
-    load_mnist_data(sys.argv[1], sys.argv[2]),
-    'mnist.bin')
-    # resume_path='mnist2.bin')
+if __name__ == '__main__':
+    # train_mnist(
+    #     load_mnist_data(sys.argv[1], sys.argv[2]),
+    #     'mnist.bin',
+    #     resume_path='mnist.bin')
 
-
-# eval_mnist(
-#     load_mnist_data(sys.argv[3], sys.argv[4]),
-#     'mnist.bin')
+    eval_mnist(
+        load_mnist_data(sys.argv[3], sys.argv[4]),
+        'mnist.bin')
