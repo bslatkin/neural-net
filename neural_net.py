@@ -5,6 +5,15 @@ import random
 import struct
 import sys
 
+
+# Prevent NumPy from using multiple threads per process, which can cause
+# the multi-processing version of this program to be slower than the single
+# process version. This environment variable must be set before numpy is
+# imported. More info here:
+# https://stackoverflow.com/questions/30791550/limit-number-of-threads-in-numpy#comment87232711_31622299
+import os
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import numpy as np
 
 
