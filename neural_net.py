@@ -31,25 +31,6 @@ class Layer:
         raise NotImplementedError
 
 
-# XXX first I need a better matrix class
-# class Optimizer:
-#     def __call__(self, gradient_matrix):
-#         pass
-
-
-# class VectorOptimizer:
-#     def __init__(self, count, learning_rate):
-#         self.count = count
-#         self.learning_rate = learning_rate
-
-#     def __call__(self, gradient_vector):
-#         result = []
-#         for element in gradient_vector:
-#             adjusted = self.learning_rate * element
-#             result.append(adjusted)
-#         return result
-
-
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
         self.input_count = input_count
@@ -118,10 +99,6 @@ class FullyConnected(Layer):
         # Columns are inputs
         # ∂E/∂Y * W^T
         input_error = output_error_matrix @ self.weights.T
-
-        # XXX work towards this
-        # adjusted_bias_error = self.bias_optimizer(bias_error)
-        # adjusted_weights_error = self.weights_optimizer(weights_error)
 
         update_data = bias_error, weights_error
         return input_error, update_data
@@ -209,7 +186,6 @@ def mean_squared_error_derivative(desired_matrix, found_matrix):
     delta_matrix = np.subtract(found_matrix, desired_matrix)
     # Each result row contains gradients for each column of an example
     result = 2 / delta_matrix.shape[1] * delta_matrix
-    # TODO: How to add L2 regularization to this?
     return result
 
 
@@ -369,23 +345,3 @@ def predict(network, input_vector):
     input_matrix = np.array([input_vector])
     _, output = feed_forward(network, input_matrix)
     return output
-
-
-def profile_func(func, *args, **kwargs):
-    import cProfile
-    import pstats
-    from pstats import SortKey
-
-    profiler = cProfile.Profile()
-    profiler.enable()
-    try:
-        return func(*args, **kwargs)
-    finally:
-        profiler.disable()
-
-        stats = pstats.Stats(profiler, stream=sys.stderr)
-        stats = stats.strip_dirs()
-        stats = stats.sort_stats(SortKey.CUMULATIVE, SortKey.TIME, SortKey.NAME)
-
-        stats.print_stats()
-        stats.print_callers()
