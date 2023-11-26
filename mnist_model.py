@@ -1,4 +1,5 @@
 import concurrent.futures
+import pickle
 import struct
 import sys
 
@@ -79,14 +80,11 @@ def create_network():
 
 
 def train_mnist(train_examples, output_path, *, resume_path=None):
-    network = create_network()
-    network.allocate_parameters()
-    network.connect()
-
     if resume_path:
         with open(resume_path, 'rb') as f:
-            f.readinto(network.parameters_bytes)
+            network = pickle.load(f)
     else:
+        network = create_network()
         network.initialize()
 
     # A bigger batch size is better when the number of model parameters is
@@ -96,27 +94,24 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=1,
-        batch_size=4,
+        batch_size=128,
         parallelism=1,
         learning_rate=0.001)
 
-    executor = concurrent.futures.ProcessPoolExecutor(
+    executor = concurrent.futures.ThreadPoolExecutor(
         max_workers=config.parallelism)
 
-    train(network, config, executor, train_examples[:100])
+    train(network, config, executor, train_examples)
 
     print(f'Outputting model checkpoint to {output_path!r}')
+
     with open(output_path, 'wb') as f:
-        f.write(network.parameters_bytes)
+        pickle.dump(network, f)
 
 
 def eval_mnist(test_examples, resume_path):
-    network = create_network()
-    network.allocate_parameters()
-    network.connect()
-
     with open(resume_path, 'rb') as f:
-        f.readinto(network.parameters_bytes)
+        network = pickle.load(f)
 
     loss = mean_squared_error
 
@@ -128,13 +123,12 @@ def eval_mnist(test_examples, resume_path):
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
-        output_list = output.to_list()
-        mse = loss(Tensor.from_list([expected_output]), output)
+        mse = loss(np.array([expected_output]), output)
         error_sum += sum(mse)
         error_count += len(mse)
 
         expected_argmax = argmax(expected_output)
-        found_argmax = argmax(output_list[0])
+        found_argmax = argmax(output[0])
         correct = found_argmax == expected_argmax
         if correct:
             correct_count += 1
@@ -147,7 +141,7 @@ def eval_mnist(test_examples, resume_path):
             f'Error={mse}')
 
         print('Label:  ', ', '.join('%.1f' % o for o in expected_output))
-        print('Output: ', ', '.join('%.1f' % o for o in output_list[0]))
+        print('Output: ', ', '.join('%.1f' % o for o in output[0]))
         print()
 
 
@@ -157,12 +151,12 @@ def eval_mnist(test_examples, resume_path):
 
 
 if __name__ == '__main__':
-    profile_func(
-        train_mnist,
+    # profile_func(
+    train_mnist(
         load_mnist_data(sys.argv[1], sys.argv[2]),
         'mnist.bin5')
     #     # resume_path='mnist.bin3')
 
-    # eval_mnist(
-    #     load_mnist_data(sys.argv[3], sys.argv[4]),
-    #     'mnist.bin5')
+    eval_mnist(
+        load_mnist_data(sys.argv[3], sys.argv[4]),
+        'mnist.bin5')
