@@ -93,8 +93,8 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=20,
-        batch_size=4096,
+        epochs=10,
+        batch_size=10_000,
         parallelism=8,
         learning_rate=0.001)
 
@@ -153,9 +153,9 @@ def eval_mnist(test_examples, resume_path):
 if __name__ == '__main__':
     train_mnist(
         load_mnist_data(sys.argv[1], sys.argv[2]),
-        'mnist.bin5',
-        resume_path='mnist.bin5')
+        'mnist.bin9',
+        resume_path='mnist.bin9')
 
     eval_mnist(
         load_mnist_data(sys.argv[3], sys.argv[4]),
-        'mnist.bin5')
+        'mnist.bin9')

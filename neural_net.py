@@ -193,6 +193,7 @@ def mean_squared_error_derivative(desired_matrix, found_matrix):
     delta_matrix = np.subtract(found_matrix, desired_matrix)
     # Each result row contains gradients for each column of an example
     result = 2 / delta_matrix.shape[1] * delta_matrix
+    # TODO: How to add L2 regularization to this?
     return result
 
 
@@ -370,15 +371,3 @@ def profile_func(func, *args, **kwargs):
 
         stats.print_stats()
         stats.print_callers()
-
-
-"""
-TODO
-- Add an Adam optimizer to adjust learning rate over time
-- Compare performance:
-    - Use batch-size-efficient generated matmul functions for inner loops
-    - Use C-extension matmul functions for inner loops
-    - Use numpy matmul functions for inner loops
-"""
-
-
