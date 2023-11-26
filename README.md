@@ -1,4 +1,4 @@
-Basic neural network code to understand the limits of pure-Python performance.
+Basic neural network code to understand the limits of Python performance for an HPC workload.
 
 To run the XOR model that shows the pieces are generally working properly:
 
