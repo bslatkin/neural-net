@@ -93,10 +93,11 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
     config = TrainingConfig(
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
-        epochs=10,
-        batch_size=10_000,
+        epochs=20,
+        batch_size=4096,
         parallelism=8,
-        learning_rate=0.001)
+        learning_rate=0.001,
+        l2_regularization=0.01)
 
     executor = concurrent.futures.ProcessPoolExecutor(
         max_workers=config.parallelism)
@@ -153,9 +154,9 @@ def eval_mnist(test_examples, resume_path):
 if __name__ == '__main__':
     train_mnist(
         load_mnist_data(sys.argv[1], sys.argv[2]),
-        'mnist.bin9',
-        resume_path='mnist.bin9')
+        'mnist.bin10',
+        resume_path='mnist.bin10')
 
     eval_mnist(
         load_mnist_data(sys.argv[3], sys.argv[4]),
-        'mnist.bin9')
+        'mnist.bin10')

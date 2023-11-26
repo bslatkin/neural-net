@@ -16,7 +16,8 @@ def test_xor():
         epochs=10_000,
         batch_size=4,
         parallelism=1,
-        learning_rate=0.1)
+        learning_rate=0.1,
+        l2_regularization=0.0001)
 
     executor = concurrent.futures.ThreadPoolExecutor(
         max_workers=config.parallelism)

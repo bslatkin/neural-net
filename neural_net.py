@@ -129,12 +129,28 @@ class FullyConnected(Layer):
     def update(self, config, update_data):
         bias_error, weights_error = update_data
 
+        # Bias comes back for each example but we need to collapse it
+        summed_bias_error = np.sum(bias_error, axis=0)
+
+        # Apply L2 regularization adjustment to the gradients
+        # Derivative of λ/2m ΣW^2 is  λ/m W
+        l2_bias_term = (
+            config.l2_regularization / self.biases.shape[0] * self.biases)
+        try:
+            l2_bias_error = summed_bias_error + l2_bias_term
+        except ValueError:
+            breakpoint()
+
+        l2_weights_term = (
+            config.l2_regularization / self.weights.shape[1] * self.weights)
+        l2_weights_error = weights_error + l2_weights_term
+
         # Update the biases
-        bias_delta = config.learning_rate * bias_error
-        self.biases -= np.sum(bias_delta, axis=0)
+        bias_delta = config.learning_rate * l2_bias_error
+        self.biases -= bias_delta
 
         # Update weights
-        weights_delta = config.learning_rate * weights_error
+        weights_delta = config.learning_rate * l2_weights_error
         self.weights -= weights_delta
 
 
@@ -218,13 +234,15 @@ class TrainingConfig:
                  epochs,
                  batch_size,
                  parallelism,
-                 learning_rate):
+                 learning_rate,
+                 l2_regularization):
         self.loss = loss
         self.loss_derivative = loss_derivative
         self.epochs = epochs
         self.batch_size = batch_size
         self.parallelism = parallelism
         self.learning_rate = learning_rate
+        self.l2_regularization = l2_regularization
 
 
 def feed_forward(network, input_matrix):
