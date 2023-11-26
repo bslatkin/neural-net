@@ -113,10 +113,7 @@ class FullyConnected(Layer):
         # Derivative of λ/2m ΣW^2 is  λ/m W
         l2_bias_term = (
             config.l2_regularization / self.biases.shape[0] * self.biases)
-        try:
-            l2_bias_error = summed_bias_error + l2_bias_term
-        except ValueError:
-            breakpoint()
+        l2_bias_error = summed_bias_error + l2_bias_term
 
         l2_weights_term = (
             config.l2_regularization / self.weights.shape[1] * self.weights)
