@@ -139,9 +139,6 @@ class Activation(Layer):
         self.function = np.vectorize(function)
         self.function_derivative = np.vectorize(function_derivative)
 
-    def parameters_count(self):
-        return 0
-
     def initialize(self):
         pass
 
