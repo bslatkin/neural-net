@@ -536,21 +536,3 @@ TODO
 """
 
 
-# TODO
-
-# def dot_product(a, b):
-#     result = 0
-#     for a_i, b_i in zip(a, b):
-#         result += a_i * b_i
-#     return result
-
-
-# def matrix_multiply(a, b):
-#     # rows are first dimension, columns second dimension
-#     result = []
-#     for row in a:
-
-#         for column in b:
-
-
-
