@@ -8,8 +8,6 @@ def test_xor():
     network.add(Activation(3, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(3, 1))
     network.add(Activation(1, sigmoid, sigmoid_derivative))
-    network.allocate_parameters()
-    network.connect()
     network.initialize()
 
     config = TrainingConfig(
@@ -20,7 +18,7 @@ def test_xor():
         parallelism=1,
         learning_rate=0.1)
 
-    executor = concurrent.futures.ProcessPoolExecutor(
+    executor = concurrent.futures.ThreadPoolExecutor(
         max_workers=config.parallelism)
 
     labeled_examples = [
@@ -41,7 +39,7 @@ def test_xor():
         output = predict(network, input_vector)
         print(f'Input={input_vector}, Output={output}')
 
-        expected_matrix = Tensor.from_list([expected_output])
+        expected_matrix = np.array([expected_output])
         mse = config.loss(expected_matrix, output)
         error_sum += sum(mse)
         error_count += len(mse)
