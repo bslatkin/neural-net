@@ -154,9 +154,9 @@ def eval_mnist(test_examples, resume_path):
 if __name__ == '__main__':
     train_mnist(
         load_mnist_data(sys.argv[1], sys.argv[2]),
-        'mnist.bin10',
-        resume_path='mnist.bin10')
+        'mnist.bin11')
+        # resume_path='mnist.bin10')
 
     eval_mnist(
         load_mnist_data(sys.argv[3], sys.argv[4]),
-        'mnist.bin10')
+        'mnist.bin11')

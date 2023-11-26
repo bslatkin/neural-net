@@ -24,10 +24,10 @@ class Layer:
     def forward(self, input_matrix):
         raise NotImplementedError
 
-    def backward(self, last_input_matrix, output_error_matrix):
+    def backward(self, config, last_input_matrix, output_error_matrix):
         raise NotImplementedError
 
-    def update(self, config, update_data):
+    def update(self, update_data):
         raise NotImplementedError
 
 
@@ -69,7 +69,7 @@ class FullyConnected(Layer):
 
         return added
 
-    def backward(self, last_input_matrix, output_error_matrix):
+    def backward(self, config, last_input_matrix, output_error_matrix):
         # Output error is ∂E/∂Y, each row is an example, and each column in each
         # row is the error gradient for that output position. But the biases
         # in this FullyConnected layer are merely a vector. So this sums all
@@ -100,12 +100,6 @@ class FullyConnected(Layer):
         # ∂E/∂Y * W^T
         input_error = output_error_matrix @ self.weights.T
 
-        update_data = bias_error, weights_error
-        return input_error, update_data
-
-    def update(self, config, update_data):
-        bias_error, weights_error = update_data
-
         # Bias comes back for each example but we need to collapse it
         summed_bias_error = np.sum(bias_error, axis=0)
 
@@ -113,19 +107,21 @@ class FullyConnected(Layer):
         # Derivative of λ/2m ΣW^2 is  λ/m W
         l2_bias_term = (
             config.l2_regularization / self.biases.shape[0] * self.biases)
-        l2_bias_error = summed_bias_error + l2_bias_term
+        l2_bias_error = (
+            config.learning_rate * summed_bias_error + l2_bias_term)
 
         l2_weights_term = (
             config.l2_regularization / self.weights.shape[1] * self.weights)
-        l2_weights_error = weights_error + l2_weights_term
+        l2_weights_error = (
+            config.learning_rate * weights_error + l2_weights_term)
 
-        # Update the biases
-        bias_delta = config.learning_rate * l2_bias_error
-        self.biases -= bias_delta
+        update_data = l2_bias_error, l2_weights_error
+        return input_error, update_data
 
-        # Update weights
-        weights_delta = config.learning_rate * l2_weights_error
-        self.weights -= weights_delta
+    def update(self, update_data):
+        bias_error, weights_error = update_data
+        self.biases -= bias_error
+        self.weights -= weights_error
 
 
 def sigmoid(value):
@@ -155,14 +151,14 @@ class Activation(Layer):
         # Each column the input at that position for the one example
         return self.function(input_matrix)
 
-    def backward(self, last_input_matrix, output_error_matrix):
+    def backward(self, config, last_input_matrix, output_error_matrix):
         # Calculating ∂E/∂Y (elementwise multiply) ∂Y/∂X to get ∂E/∂X
         input_gradient = self.function_derivative(last_input_matrix)
         result = output_error_matrix * input_gradient
         update_data = None
         return result, update_data
 
-    def update(self, config, update_data):
+    def update(self, update_data):
         pass
 
 
@@ -252,7 +248,8 @@ def train_shard(network, config, shard):
     items = list(zip(range(len(network.layers)), network.layers, history))
 
     for layer_index, layer, last_input in reversed(items):
-        input_error, update_data = layer.backward(last_input, output_error)
+        input_error, update_data = layer.backward(
+            config, last_input, output_error)
         output_error = input_error
         if update_data:
             all_updates.append((layer_index, update_data))
@@ -284,7 +281,7 @@ def train_batch(network, config, executor, batch):
     # each layer are updated based on the error gradients computed in parallel
     # for the step above.
     for layer_index, update_data in all_updates:
-        network.layers[layer_index].update(config, update_data)
+        network.layers[layer_index].update(update_data)
 
     return error_sum, error_count
 
