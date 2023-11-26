@@ -114,12 +114,21 @@ class FullyConnected(Layer):
         # Each column within a row is an input value for that specific example
         # Compute Y = XW + B
         multiplied = matrix_multiply(input_matrix, self.weights)
-        breakpoint()
+
         # Biases is a column vector, and each value of that needs to be
         # added to the corresponding column for each row.
-        # XXX fixing bug here
-        added = matrix_elementwise_add(multiplied, self.biases)
-        return added
+        #
+        # TODO: Make this a more obvious matrix operation?
+        result = Tensor(multiplied.columns, multiplied.rows)
+
+        for j in range(result.rows):
+            for i in range(result.columns):
+                value = multiplied.get(i, j)
+                bias = self.biases.get(0, i)
+                added = value + bias
+                result.set(i, j, added)
+
+        return result
 
     def backward(self, last_input_matrix, output_error_matrix):
         # Output error is ∂E/∂Y, each row is an example, and each column in each
@@ -255,7 +264,9 @@ def mean_squared_error(desired_matrix, found_matrix):
         lambda total: total / delta_matrix.columns,
         summed_matrix)
 
-    return average_matrix
+    # Convert it to a list for each usage elsewhere in eval pipeline
+    # TODO: Consider using a tensor everywhere
+    return list(average_matrix.column(0))
 
 
 def mean_squared_error_derivative(desired_matrix, found_matrix):
@@ -438,7 +449,9 @@ def train(network, config, executor, examples):
 
 
 def predict(network, input_vector):
-    input_matrix = [input_vector]
+    # TODO: Move this into example creation to avoid having to do the
+    # conversion repeatedly for the same input examples.
+    input_matrix = Tensor.from_list([input_vector])
     _, output = feed_forward(network, input_matrix)
     return output
 

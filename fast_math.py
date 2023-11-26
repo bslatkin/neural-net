@@ -61,9 +61,17 @@ class Tensor(BaseTensor):
         self._init_view()
 
     def set(self, x, y, value):
+        if y >= self.rows:
+            breakpoint()
+        if x >= self.columns:
+            breakpoint()
         self.view[y, x] = value
 
     def get(self, x, y):
+        if y >= self.rows:
+            breakpoint()
+        if x >= self.columns:
+            breakpoint()
         return self.view[y, x]
 
     @classmethod
@@ -159,8 +167,8 @@ def matrix_elementwise_subtract(a, b):
 def matrix_apply(func, a):
     result = Tensor(a.columns, a.rows)
 
-    for y in range(a.columns):
-        for x in range(a.rows):
+    for y in range(a.rows):
+        for x in range(a.columns):
             input_value = a.get(x, y)
             output_value = func(input_value)
             result.set(x, y, output_value)

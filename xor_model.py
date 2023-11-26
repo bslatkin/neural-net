@@ -32,7 +32,7 @@ def test_xor():
 
     train(network, config, executor, labeled_examples)
 
-    test_examples = example_matrixes
+    test_examples = labeled_examples
 
     error_sum = 0
     error_count = 0
@@ -41,7 +41,9 @@ def test_xor():
         output = predict(network, input_vector)
         print(f'Input={input_vector}, Output={output}')
 
-        mse = config.loss([expected_output], output)
+        expected_matrix = Tensor.from_list([expected_output])
+
+        mse = config.loss(expected_matrix, output)
         error_sum += sum(mse)
         error_count += len(mse)
 
