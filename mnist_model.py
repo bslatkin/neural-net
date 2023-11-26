@@ -120,7 +120,7 @@ def eval_mnist(test_examples, resume_path):
     error_count = 0
     correct_count = 0
 
-    test_examples = random.sample(test_examples, 100)
+    test_examples = random.sample(test_examples, 1000)
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
