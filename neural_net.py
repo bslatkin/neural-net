@@ -5,9 +5,7 @@ import random
 import struct
 import sys
 
-
-TYPE_FORMAT = 'f'
-PARAMETER_SIZE_BYTES = struct.calcsize(TYPE_FORMAT)
+from fast_math import *
 
 
 class Layer:
@@ -56,15 +54,27 @@ class FullyConnected(Layer):
         self.parameters = None
 
     def __getstate__(self):
+        if self.parameters:
+            parameters_bytes = bytes(self.parameters.cast('B'))
+            type_format = self.parameters.format
+        else:
+            parameters_bytes = None
+            type_format = None
+
         return dict(
             input_count=self.input_count,
             output_count=self.output_count,
-            parameters=self.parameters)
+            parameters_bytes=parameters_bytes,
+            type_format=type_format)
 
     def __setstate__(self, state):
+        parameters_bytes = state.pop('parameters_bytes')
+        type_format = state.pop('type_format')
         self.__dict__.update(state)
-        if self.parameters:
-            self.connect(self.parameters)
+
+        if parameters_bytes:
+            parameters = memoryview(parameters_bytes).cast(type_format)
+            self.connect(parameters)
 
     def parameters_count(self):
         # One weight for each input/output pair
@@ -76,135 +86,87 @@ class FullyConnected(Layer):
     def connect(self, parameters):
         self.parameters = parameters
 
-        view = memoryview(self.parameters)
+        self.biases = Tensor(
+            1,
+            self.output_count,
+            data=parameters[:self.output_count])
 
-        output_bytes = self.output_count * PARAMETER_SIZE_BYTES
-
-        self.biases = view[:output_bytes].cast(
-            TYPE_FORMAT, shape=(self.output_count,))
-
-        self.weights = view[output_bytes:].cast(
-            TYPE_FORMAT, shape=(self.input_count, self.output_count))
+        self.weights = Tensor(
+            self.output_count,
+            self.input_count,
+            data=parameters[self.output_count:])
 
     def initialize(self):
         for j in range(self.output_count):
             bias_j = random.normalvariate(mu=0, sigma=1)
-            self.biases[j] = bias_j
+            self.biases.set(0, j, bias_j)
 
         # Rows are number of inputs
         # Columns are number of outputs
         # Column vectors are the weights for one output
-        for i in range(self.input_count):
-            for j in range(self.output_count):
-                weight_ij = random.normalvariate(mu=0, sigma=1)
-                self.weights[i, j] = weight_ij
+        for j in range(self.output_count):
+            for i in range(self.input_count):
+                weight_ji = random.normalvariate(mu=0, sigma=1)
+                self.weights.set(j, i, weight_ji)
 
     def forward(self, input_matrix):
-        # Row vectors are the inputs for one batch
+        # Row vectors are the inputs for one example
         # Each column within a row is an input value for that specific example
-        batch_size = len(input_matrix)
-
-        # TODO: Consider using a pre-allocated array for this hidden state
-        # for each iteration instead of reallocating it every time through.
-        # Or possibly pass in the hidden state vector from the outside so
-        # the memory buffer can be centrally manged and synchronized. Needs
-        # to allow multiple forward() calls at the same time from different
-        # threads/processes using the network parameters as shared memory.
-        # Alternatively could use a bytearray which will be efficiently
-        # serialized through a pickled channel.
-        result = []
-
-        # Output has batch size rows, output size columns
-        for b in range(batch_size):
-            input_b = input_matrix[b]
-            output_b = []
-
-            for j in range(self.output_count):
-                bias_j = self.biases[j]
-                output_j = bias_j
-
-                for i in range(self.input_count):
-                    x_i = input_b[i]
-                    weight_ij = self.weights[i, j]
-                    output_j += x_i * weight_ij
-
-                output_b.append(output_j)
-
-            result.append(output_b)
-
-        return result
+        # Compute Y = XW + B
+        multiplied = matrix_multiply(input_matrix, self.weights)
+        breakpoint()
+        # Biases is a column vector, and each value of that needs to be
+        # added to the corresponding column for each row.
+        # XXX fixing bug here
+        added = matrix_elementwise_add(multiplied, self.biases)
+        return added
 
     def backward(self, last_input_matrix, output_error_matrix):
-        batch_size = len(output_error_matrix)
-
-        # Output error is ∂E/∂Y, each row is a batch, and each column in each
+        # Output error is ∂E/∂Y, each row is an example, and each column in each
         # row is the error gradient for that output position. But the biases
         # in this FullyConnected layer are merely a vector. So this sums all
-        # of the gradients for each output positions across all batches
+        # of the gradients for each output positions across all examples
         # in order to calculate the error gradient for the bias update.
         # This took me a long time to figure out! This post helped:
         # https://stats.stackexchange.com/questions/373163/how-are-biases-updated-when-batch-size-1
-        bias_error = []
+        bias_error = Tensor(self.output_count, 1)
         for j in range(self.output_count):
             bias_error_j = 0
-            for i in range(batch_size):
-                output_error_ij = output_error_matrix[i][j]
-                bias_error_j += output_error_ij
-            bias_error.append(bias_error_j)
+            for i in range(output_error_matrix.rows):
+                output_error_ji = output_error_matrix.get(j, i)
+                bias_error_j += output_error_ji
+            bias_error.set(j, 0, bias_error_j)
 
         # Same size as the weights matrix
         # Rows are number of inputs
         # Columns are number of outputs
+        #
         # X^T * ∂E/∂Y
-        weights_error = []
-        for i in range(self.input_count):
-            weights_i = []
-            for j in range(self.output_count):
-                weights_i.append(0)
-            weights_error.append(weights_i)
-
-        # x has one row per batch with columns being input values
-        # x^t has each batch as a column, so each row is the i-th input across all batches
-
-        # ∂E/∂Y has one row per batch, each column is the j-th output
+        #
+        # x has one row per example with columns being input values
+        # x^t has each example as a column, so each row is the i-th input across all examples
+        #
+        # ∂E/∂Y has one row per example, each column is the j-th output
         # the weight error at each point ij is the dot product
-        # of the i-th input across all batches with the j-th output
-        # across all batches.
-        for i in range(self.input_count):
-            for j in range(self.output_count):
-                delta = 0
-
-                for batch_index in range(batch_size):
-                    input_bi = last_input_matrix[batch_index][i]
-                    output_error_bj = output_error_matrix[batch_index][j]
-                    delta += input_bi * output_error_bj
-
-                weights_error[i][j] = delta
+        # of the i-th input across all examples with the j-th output
+        # across all examples.
+        weights_error = matrix_multiply(
+            last_input_matrix.transpose(),
+            output_error_matrix)
 
         # Same size as the input
-        # Rows are batches
+        # Rows are examples
         # Columns are inputs
         # ∂E/∂Y * W^T
-        input_error = []
-        for batch_index in range(batch_size):
-            input_error_b = []
-            for i in range(self.input_count):
-                input_error_b.append(0)
-            input_error.append(input_error_b)
-
-        for i in range(self.input_count):
-            for j in range(self.output_count):
-                weight_ij = self.weights[i, j]
-
-                for batch_index in range(batch_size):
-                    output_error_bj = output_error_matrix[batch_index][j]
-                    input_error[batch_index][i] += output_error_bj * weight_ij
+        input_error = matrix_multiply(
+            output_error_matrix,
+            self.weights.transpose())
 
         # XXX work towards this
         # adjusted_bias_error = self.bias_optimizer(bias_error)
         # adjusted_weights_error = self.weights_optimizer(weights_error)
 
-        update_data = adjusted_bias_error, adjusted_weights_error
+        update_data = bias_error, weights_error
         return input_error, update_data
 
     def update(self, config, update_data):
@@ -212,36 +174,35 @@ class FullyConnected(Layer):
 
         # Update the biases
         for j in range(self.output_count):
-            bias_error_j = adjusted_bias_error[j]
-            self.biases[j] -= config.learning_rate * bias_error_j
+            bias_error_j = bias_error.get(j, 0)
+            bias_delta = config.learning_rate * bias_error_j
+
+            bias_j = self.biases.get(0, j)
+            next_bias_j = bias_j - bias_delta
+            self.biases.set(0, j, next_bias_j)
 
         # Update weights
         for i in range(self.input_count):
             for j in range(self.output_count):
-                weights_error_ij = weights_error[i][j]
-                delta = config.learning_rate * weights_error_ij
-                self.weights[i, j] -= delta
+                weight_error_ji = weights_error.get(j, i)
+                weight_delta = config.learning_rate * weight_error_ji
+
+                weight_ji = self.weights.get(j, i)
+                next_weight_ji = weight_ji - weight_delta
+                self.weights.set(j, i, next_weight_ji)
 
 
-def sigmoid(input_vector):
-    result = []
-    for item in input_vector:
-        value = 1 / (1 + math.exp(-item))
-        result.append(value)
-    return result
+def sigmoid(value):
+    return 1 / (1 + math.exp(-value))
 
 
-def sigmoid_derivative(input_vector):
-    result = []
-    for f_x in sigmoid(input_vector):
-        value = f_x * (1 - f_x)
-        result.append(value)
-    return result
+def sigmoid_derivative(value):
+    f_x = sigmoid(value)
+    return f_x * (1 - f_x)
 
 
 class Activation(Layer):
     def __init__(self, count, function, function_derivative):
-        super().__init__()
         self.count = count
         self.function = function
         self.function_derivative = function_derivative
@@ -256,35 +217,18 @@ class Activation(Layer):
         pass
 
     def forward(self, input_matrix):
-        batch_size = len(input_matrix)
-
-        result = []
-
-        for batch_index in range(batch_size):
-            input_b = input_matrix[batch_index]
-            output_b = self.function(input_b)
-            result.append(output_b)
-
-        return result
+        # Output exactly matches the input
+        # Row contains all inputs for one example
+        # Each column the input at that position for the one example
+        return matrix_apply(self.function, input_matrix)
 
     def backward(self, last_input_matrix, output_error_matrix):
-        batch_size = len(last_input_matrix)
-
-        result = []
-
-        for batch_index in range(batch_size):
-            last_input_b = last_input_matrix[batch_index]
-            output_error = output_error_matrix[batch_index]
-            output_derivative = self.function_derivative(last_input_b)
-
-            input_error_b = []
-
-            for error_i, derivative_i in zip(output_error, output_derivative):
-                input_error_i = error_i * derivative_i
-                input_error_b.append(input_error_i)
-
-            result.append(input_error_b)
-
+        # Calculating ∂E/∂Y (elementwise multiply) ∂Y/∂X to get ∂E/∂X
+        input_gradient = matrix_apply(
+            self.function_derivative, last_input_matrix)
+        result = matrix_elementwise_multiply(
+            output_error_matrix,
+            input_gradient)
         update_data = None
         return result, update_data
 
@@ -293,80 +237,68 @@ class Activation(Layer):
 
 
 def mean_squared_error(desired_matrix, found_matrix):
-    batch_size = len(desired_matrix)
+    # For found matrix and desired matrix
+    # Row vectors are examples
+    # Columns are outputs for a specific example
+    delta_matrix = matrix_elementwise_subtract(desired_matrix, found_matrix)
 
-    result = []
+    squared_matrix = matrix_apply(
+        lambda x: x**2,
+        delta_matrix)
 
-    for batch_index in range(batch_size):
-        desired = desired_matrix[batch_index]
-        found = found_matrix[batch_index]
+    # Output is a column vector with one value per example
+    summed_matrix = matrix_rowwise_apply(
+        sum,
+        squared_matrix)
 
-        total = 0
-        for desired_i, found_i in zip(desired, found):
-            delta = desired_i - found_i
-            total += delta ** 2
-        mean = total / len(desired)
+    average_matrix = matrix_apply(
+        lambda total: total / delta_matrix.columns,
+        summed_matrix)
 
-        result.append(mean)
-
-    return result
+    return average_matrix
 
 
 def mean_squared_error_derivative(desired_matrix, found_matrix):
-    # Row vectors are batches
-    # Columns are outputs for a specific batch
-    batch_size = len(desired_matrix)
+    # Row vectors are examples
+    # Columns are outputs for a specific example
+    delta_matrix = matrix_elementwise_subtract(found_matrix, desired_matrix)
 
-    result = []
-
-    for batch_index in range(batch_size):
-        desired = desired_matrix[batch_index]
-        found = found_matrix[batch_index]
-
-        # Each result row contains gradients for each column of a batch
-        batch_result = []
-
-        for desired_i, found_i in zip(desired, found):
-            delta = found_i - desired_i
-            scaled = 2 / len(desired) * delta
-            batch_result.append(scaled)
-
-        result.append(batch_result)
+    # Each result row contains gradients for each column of an example
+    result = matrix_apply(
+        lambda delta: 2 / delta_matrix.columns * delta,
+        delta_matrix)
 
     return result
 
 
 class Network:
-    def __init__(self, parameter_size_bytes):
-        self.parameter_size_bytes = parameter_size_bytes
+    def __init__(self, type_format='f'):
+        self.type_format = type_format
         self.layers = []
-        self.parameters = None
+        self.parameters_bytes = None
 
     def add(self, layer):
         self.layers.append(layer)
 
-    def parameters_bytes(self):
+    def parameters_count(self):
         total_count = 0
         for layer in self.layers:
             total_count += layer.parameters_count()
-
-        total_bytes = self.parameter_size_bytes * total_count
-        return total_bytes
+        return total_count
 
     def allocate_parameters(self):
-        total_bytes = self.parameters_bytes()
-        parameters = bytearray(total_bytes)
-        return parameters
+        size_bytes = struct.calcsize(self.type_format)
+        self.parameters_bytes = bytearray(size_bytes * self.parameters_count())
 
-    def connect(self, parameters):
-        self.parameters = parameters
-        offset_bytes = 0
+    def connect(self):
+        parameters = memoryview(self.parameters_bytes).cast(self.type_format)
+        offset = 0
+
         for layer in self.layers:
             next_count = layer.parameters_count()
-            next_bytes = self.parameter_size_bytes * next_count
-            next_parameters = parameters[offset_bytes:offset_bytes+next_bytes]
+            next_parameters = parameters[offset:offset+next_count]
             layer.connect(next_parameters)
-            offset_bytes += next_bytes
+            offset += next_count
 
     def initialize(self):
         for layer in self.layers:
@@ -403,7 +335,12 @@ def feed_forward(network, input_matrix):
 
 
 def train_shard(network, config, shard):
-    input_matrix, expected_output = zip(*shard)
+    input_examples, expected_output = zip(*shard)
+
+    # TODO: Move this into example creation to avoid having to do the
+    # conversion repeatedly for the same input examples.
+    input_matrix = Tensor.from_list(input_examples)
+    expected_matrix = Tensor.from_list(expected_output)
 
     # Why even have shards within a batch? Why not just run one example in each
     # shard? The reason is that you might be able to utilize in-core
@@ -411,8 +348,8 @@ def train_shard(network, config, shard):
     # at the same time on the same core (e.g., using NumPy).
     history, output = feed_forward(network, input_matrix)
 
-    mse = config.loss(expected_output, output)
-    output_error = config.loss_derivative(expected_output, output)
+    mse = config.loss(expected_matrix, output)
+    output_error = config.loss_derivative(expected_matrix, output)
 
     all_updates = []
 
@@ -424,7 +361,7 @@ def train_shard(network, config, shard):
         if update_data:
             all_updates.append((layer_index, update_data))
 
-    return mse, len(shard), all_updates
+    return mse, all_updates
 
 
 def train_batch(network, config, executor, batch):
@@ -442,9 +379,9 @@ def train_batch(network, config, executor, batch):
         all_futures.append(future)
 
     for future in all_futures:
-        mse, count, updates = future.result()
+        mse, updates = future.result()
         error_sum += sum(mse)
-        error_count += count
+        error_count += len(mse)
         all_updates.extend(updates)
 
     # This is the "all to all" step, where the model weights and biases for

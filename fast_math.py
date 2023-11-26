@@ -1,8 +1,5 @@
+import operator
 import struct
-
-
-TYPE_FORMAT = 'f'
-PARAMETER_SIZE_BYTES = struct.calcsize(TYPE_FORMAT)
 
 
 class BaseTensor:
@@ -20,7 +17,7 @@ class BaseTensor:
         for y in range(self.rows):
             yield self.get(x, y)
 
-    def as_list(self):
+    def to_list(self):
         result = []
         for y in range(self.rows):
             result.append(list(self.row(y)))
@@ -30,22 +27,54 @@ class BaseTensor:
         return Transposed(self)
 
     def __repr__(self):
-        return repr(self.as_list())
+        return f'{self.__class__.__name__}({self.to_list()!r})'
 
 
 class Tensor(BaseTensor):
-    def __init__(self, rows, columns):
-        self.rows = rows
+    def __init__(self, columns, rows, *, data=None, type_format='f'):
         self.columns = columns
-        self.data = bytearray(PARAMETER_SIZE_BYTES * rows * columns)
-        self.view = memoryview(self.data).cast(
-            TYPE_FORMAT, shape=(self.rows, self.columns))
+        self.rows = rows
+
+        if data is None:
+            size_bytes = struct.calcsize(type_format)
+            data_bytes = bytearray(size_bytes * rows * columns)
+        else:
+            data_bytes = data.cast('B')
+            type_format = data.format
+
+        self.data_bytes = data_bytes
+        self.type_format = type_format
+        self._init_view()
+
+    def _init_view(self):
+        self.view = memoryview(self.data_bytes).cast(
+            self.type_format,
+            shape=(self.rows, self.columns))
+
+    def __getstate__(self):
+        result = self.__dict__.copy()
+        del result['view']
+        return result
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._init_view()
 
     def set(self, x, y, value):
         self.view[y, x] = value
 
     def get(self, x, y):
         return self.view[y, x]
+
+    @classmethod
+    def from_list(cls, the_list):
+        rows = len(the_list)
+        columns = len(the_list[0])
+        result = cls(columns, rows)
+        for y in range(rows):
+            for x in range(columns):
+                result.set(x, y, the_list[y][x])
+        return result
 
 
 class Transposed(BaseTensor):
@@ -78,7 +107,8 @@ class Transposed(BaseTensor):
 
 def matrix_multiply(a, b):
     assert a.columns == b.rows, f'{a.columns=} == {b.rows=}'
-    result = Tensor(a.rows, b.columns)
+
+    result = Tensor(b.columns, a.rows)
 
     for y in range(result.rows):
         for x in range(result.columns):
@@ -91,9 +121,64 @@ def matrix_multiply(a, b):
 
 
 def dot_product(a, b):
-    assert a.rows == b.rows == 1
+    assert a.rows == b.rows == 1, f'{a.rows=} == {b.rows=} == 1'
+
     result = matrix_multiply(a, b.transpose())
+
     return result.get(0, 0)
+
+
+def matrix_elementwise_apply(func, a, b):
+    assert a.rows == b.rows, f'{a.rows=} == {b.rows=}'
+    assert a.columns == b.columns, f'{a.columns=} == {b.columns=}'
+
+    result = Tensor(a.columns, a.rows)
+
+    for y in range(result.rows):
+        for x in range(result.columns):
+            a_value = a.get(x, y)
+            b_value = b.get(x, y)
+            added = func(a_value, b_value)
+            result.set(x, y, added)
+
+    return result
+
+
+def matrix_elementwise_add(a, b):
+    return matrix_elementwise_apply(operator.add, a, b)
+
+
+def matrix_elementwise_multiply(a, b):
+    return matrix_elementwise_apply(operator.mul, a, b)
+
+
+def matrix_elementwise_subtract(a, b):
+    return matrix_elementwise_apply(operator.sub, a, b)
+
+
+def matrix_apply(func, a):
+    result = Tensor(a.columns, a.rows)
+
+    for y in range(a.columns):
+        for x in range(a.rows):
+            input_value = a.get(x, y)
+            output_value = func(input_value)
+            result.set(x, y, output_value)
+
+    return result
+
+
+def matrix_rowwise_apply(func, a):
+    # Outputs a column vector
+    result = Tensor(1, a.rows)
+
+    for y in range(result.rows):
+        row = a.row(y)
+        value = func(row)
+        result.set(0, y, value)
+
+    return result
+
 
 
 # def matmul_1x1(a, b):
@@ -143,12 +228,8 @@ def dot_product(a, b):
 
 
 
-
-
-# TODO
-
 def test_tensors():
-    t1 = Tensor(2, 3)
+    t1 = Tensor(3, 2)
     t1.set(0, 0, 5)
     t1.set(0, 1, 6)
     t1.set(1, 0, 7)
@@ -163,13 +244,13 @@ def test_tensors():
     t3 = t2.transpose()
     print(f'{t3=}')
 
-    v1 = Tensor(1, 3)
+    v1 = Tensor(3, 1)
     v1.set(0, 0, 5)
     v1.set(1, 0, 6)
     v1.set(2, 0, 7)
     print(f'{v1=}')
 
-    v2 = Tensor(1, 3)
+    v2 = Tensor(3, 1)
     v2.set(0, 0, 12)
     v2.set(1, 0, 13)
     v2.set(2, 0, 14)
