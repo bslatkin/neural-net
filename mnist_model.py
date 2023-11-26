@@ -101,7 +101,7 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
         epochs=1,
         batch_size=1024,
         parallelism=8,
-        learning_rate=0.1)
+        learning_rate=0.001)
 
     executor = concurrent.futures.ProcessPoolExecutor(
         max_workers=config.parallelism)

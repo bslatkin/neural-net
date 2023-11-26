@@ -30,6 +30,25 @@ class Layer:
         raise NotImplementedError
 
 
+# XXX first I need a better matrix class
+# class Optimizer:
+#     def __call__(self, gradient_matrix):
+#         pass
+
+
+# class VectorOptimizer:
+#     def __init__(self, count, learning_rate):
+#         self.count = count
+#         self.learning_rate = learning_rate
+
+#     def __call__(self, gradient_vector):
+#         result = []
+#         for element in gradient_vector:
+#             adjusted = self.learning_rate * element
+#             result.append(adjusted)
+#         return result
+
+
 class FullyConnected(Layer):
     def __init__(self, input_count, output_count):
         self.input_count = input_count
@@ -181,7 +200,11 @@ class FullyConnected(Layer):
                     output_error_bj = output_error_matrix[batch_index][j]
                     input_error[batch_index][i] += output_error_bj * weight_ij
 
-        update_data = bias_error, weights_error
+        # XXX work towards this
+        # adjusted_bias_error = self.bias_optimizer(bias_error)
+        # adjusted_weights_error = self.weights_optimizer(weights_error)
+
+        update_data = adjusted_bias_error, adjusted_weights_error
         return input_error, update_data
 
     def update(self, config, update_data):
@@ -189,7 +212,7 @@ class FullyConnected(Layer):
 
         # Update the biases
         for j in range(self.output_count):
-            bias_error_j = bias_error[j]
+            bias_error_j = adjusted_bias_error[j]
             self.biases[j] -= config.learning_rate * bias_error_j
 
         # Update weights
@@ -505,6 +528,7 @@ def profile_func(func, *args, **kwargs):
 
 """
 TODO
+- Add an Adam optimizer to adjust learning rate over time
 - Compare performance:
     - Use batch-size-efficient generated matmul functions for inner loops
     - Use C-extension matmul functions for inner loops
