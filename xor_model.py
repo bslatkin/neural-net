@@ -20,7 +20,7 @@ def test_xor():
         parallelism=1,
         learning_rate=0.1)
 
-    executor = concurrent.futures.ThreadPoolExecutor(
+    executor = concurrent.futures.ProcessPoolExecutor(
         max_workers=config.parallelism)
 
     labeled_examples = [
@@ -42,7 +42,6 @@ def test_xor():
         print(f'Input={input_vector}, Output={output}')
 
         expected_matrix = Tensor.from_list([expected_output])
-
         mse = config.loss(expected_matrix, output)
         error_sum += sum(mse)
         error_count += len(mse)

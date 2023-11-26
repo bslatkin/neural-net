@@ -39,6 +39,8 @@ class Tensor(BaseTensor):
             size_bytes = struct.calcsize(type_format)
             data_bytes = bytearray(size_bytes * rows * columns)
         else:
+            # Tensors created from provided data can't be pickled because the
+            # underlying data is a memoryview, not a bytearray.
             data_bytes = data.cast('B')
             type_format = data.format
 

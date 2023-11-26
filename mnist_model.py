@@ -68,7 +68,7 @@ def argmax(vector):
 
 
 def create_network():
-    network = Network(PARAMETER_SIZE_BYTES)
+    network = Network()
     network.add(FullyConnected(28*28, 100))
     network.add(Activation(100, sigmoid, sigmoid_derivative))
     network.add(FullyConnected(100, 50))
@@ -80,15 +80,12 @@ def create_network():
 
 def train_mnist(train_examples, output_path, *, resume_path=None):
     network = create_network()
-
-    parameters = network.allocate_parameters()
-    network.connect(parameters)
-
-    print(f'Model parameters are {len(parameters)} bytes')
+    network.allocate_parameters()
+    network.connect()
 
     if resume_path:
         with open(resume_path, 'rb') as f:
-            f.readinto(parameters)
+            f.readinto(network.parameters_bytes)
     else:
         network.initialize()
 
@@ -99,28 +96,27 @@ def train_mnist(train_examples, output_path, *, resume_path=None):
         loss=mean_squared_error,
         loss_derivative=mean_squared_error_derivative,
         epochs=1,
-        batch_size=1024,
-        parallelism=8,
+        batch_size=4,
+        parallelism=1,
         learning_rate=0.001)
 
     executor = concurrent.futures.ProcessPoolExecutor(
         max_workers=config.parallelism)
 
-    train(network, config, executor, train_examples)
+    train(network, config, executor, train_examples[:100])
 
     print(f'Outputting model checkpoint to {output_path!r}')
     with open(output_path, 'wb') as f:
-        f.write(parameters)
+        f.write(network.parameters_bytes)
 
 
 def eval_mnist(test_examples, resume_path):
     network = create_network()
-
-    parameters = network.allocate_parameters()
-    network.connect(parameters)
+    network.allocate_parameters()
+    network.connect()
 
     with open(resume_path, 'rb') as f:
-        f.readinto(parameters)
+        f.readinto(network.parameters_bytes)
 
     loss = mean_squared_error
 
@@ -132,12 +128,13 @@ def eval_mnist(test_examples, resume_path):
 
     for input_vector, expected_output in test_examples:
         output = predict(network, input_vector)
-        mse = loss([expected_output], output)
+        output_list = output.to_list()
+        mse = loss(Tensor.from_list([expected_output]), output)
         error_sum += sum(mse)
         error_count += len(mse)
 
         expected_argmax = argmax(expected_output)
-        found_argmax = argmax(output[0])
+        found_argmax = argmax(output_list[0])
         correct = found_argmax == expected_argmax
         if correct:
             correct_count += 1
@@ -150,7 +147,7 @@ def eval_mnist(test_examples, resume_path):
             f'Error={mse}')
 
         print('Label:  ', ', '.join('%.1f' % o for o in expected_output))
-        print('Output: ', ', '.join('%.1f' % o for o in output[0]))
+        print('Output: ', ', '.join('%.1f' % o for o in output_list[0]))
         print()
 
 
@@ -160,11 +157,12 @@ def eval_mnist(test_examples, resume_path):
 
 
 if __name__ == '__main__':
-    train_mnist(
+    profile_func(
+        train_mnist,
         load_mnist_data(sys.argv[1], sys.argv[2]),
         'mnist.bin5')
-        # resume_path='mnist.bin3')
+    #     # resume_path='mnist.bin3')
 
-    eval_mnist(
-        load_mnist_data(sys.argv[3], sys.argv[4]),
-        'mnist.bin5')
+    # eval_mnist(
+    #     load_mnist_data(sys.argv[3], sys.argv[4]),
+    #     'mnist.bin5')

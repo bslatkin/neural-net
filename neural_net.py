@@ -427,6 +427,9 @@ def train(network, config, executor, examples):
     print('Start training')
 
     for epoch_index in range(config.epochs):
+        # TODO: Do all of the data shuffling and batching before training
+        # so these example tensor batches are all dense and don't need to be
+        # repeatedly recreated for each epoch.
         random.shuffle(examples)
 
         shard_size = max(1, config.batch_size // config.parallelism)
